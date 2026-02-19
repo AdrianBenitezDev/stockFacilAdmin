@@ -36,6 +36,7 @@ const navPlansBtn = document.getElementById("admin-nav-plans-btn");
 const usersSection = document.getElementById("admin-users-section");
 const plansSection = document.getElementById("admin-plans-section");
 const usersSearchInput = document.getElementById("admin-users-search");
+const globalLoadingNode = document.getElementById("admin-global-loading");
 const generatedAtNode = document.getElementById("admin-generated-at");
 const tableBody = document.getElementById("admin-users-table-body");
 const userActionsPanel = document.getElementById("admin-user-actions-panel");
@@ -67,6 +68,7 @@ let activeSection = "users";
 let selectedUserUid = "";
 let selectedUserRow = null;
 let selectedEmployees = [];
+let pendingGlobalLoads = 0;
 
 init().catch((error) => {
   console.error(error);
@@ -146,7 +148,7 @@ async function loadOverview() {
   setTableLoading();
   try {
     const token = await user.getIdToken(true);
-    const response = await fetch(getAdminOverviewEndpoint(), {
+    const response = await fetchWithLoading(getAdminOverviewEndpoint(), {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`
@@ -290,7 +292,7 @@ async function loadPlans() {
 
   try {
     const token = await user.getIdToken(true);
-    const response = await fetch(getAdminPlansEndpoint(), {
+    const response = await fetchWithLoading(getAdminPlansEndpoint(), {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`
@@ -413,7 +415,7 @@ async function handlePlanSave(event) {
       activo: Boolean(planActiveInput.checked)
     };
 
-    const response = await fetch(getAdminPlansEndpoint(), {
+    const response = await fetchWithLoading(getAdminPlansEndpoint(), {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
@@ -451,11 +453,13 @@ function showLoggedOutState() {
   selectedUserUid = "";
   selectedUserRow = null;
   selectedEmployees = [];
+  pendingGlobalLoads = 0;
   tableBody.innerHTML = '<tr><td colspan="11">Sin datos.</td></tr>';
   if (metricEstimatedRevenue) metricEstimatedRevenue.textContent = "$0,00 / mes";
   if (planCardsNode) planCardsNode.innerHTML = "";
   planForm?.classList.add("hidden");
   userActionsPanel?.classList.add("hidden");
+  globalLoadingNode?.classList.add("hidden");
   setEmployeesPlaceholder("Selecciona un usuario para ver sus empleados.");
 }
 
@@ -530,6 +534,27 @@ function toPositiveInteger(value) {
   return Math.trunc(numeric);
 }
 
+async function fetchWithLoading(input, init) {
+  showGlobalLoading();
+  try {
+    return await fetch(input, init);
+  } finally {
+    hideGlobalLoading();
+  }
+}
+
+function showGlobalLoading() {
+  pendingGlobalLoads += 1;
+  globalLoadingNode?.classList.remove("hidden");
+}
+
+function hideGlobalLoading() {
+  pendingGlobalLoads = Math.max(0, pendingGlobalLoads - 1);
+  if (pendingGlobalLoads === 0) {
+    globalLoadingNode?.classList.add("hidden");
+  }
+}
+
 function renderSelectedUserActions() {
   if (!selectedUserRow) {
     userActionsPanel?.classList.add("hidden");
@@ -565,7 +590,7 @@ async function loadSelectedUserDetails() {
       uid: String(selectedUserRow?.uid || "").trim(),
       tenantId: String(selectedUserRow?.tenantId || "").trim()
     });
-    const response = await fetch(`${getAdminAccountsEndpoint()}?${params.toString()}`, {
+    const response = await fetchWithLoading(`${getAdminAccountsEndpoint()}?${params.toString()}`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`
@@ -606,7 +631,7 @@ async function handleToggleUserStatus() {
 
   try {
     const token = await auth.currentUser.getIdToken(true);
-    const response = await fetch(getAdminAccountsEndpoint(), {
+    const response = await fetchWithLoading(getAdminAccountsEndpoint(), {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
@@ -701,7 +726,7 @@ async function handleEmployeeToggleClick(event) {
   target.disabled = true;
   try {
     const token = await auth.currentUser.getIdToken(true);
-    const response = await fetch(getAdminAccountsEndpoint(), {
+    const response = await fetchWithLoading(getAdminAccountsEndpoint(), {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
