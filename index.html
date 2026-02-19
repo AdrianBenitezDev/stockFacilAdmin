@@ -28,46 +28,104 @@
     </section>
 
     <section id="admin-dashboard-panel" class="panel hidden">
-      <h2>Resumen de clientes</h2>
-      <div class="cards-grid">
-        <article class="summary-card">
-          <h3>Usuarios</h3>
-          <p id="metric-total-users" class="metric-value">0</p>
-        </article>
-        <article class="summary-card">
-          <h3>Empleados</h3>
-          <p id="metric-total-employees" class="metric-value">0</p>
-        </article>
-        <article class="summary-card">
-          <h3>Productos</h3>
-          <p id="metric-total-products" class="metric-value">0</p>
-        </article>
+      <h2>Panel administrador</h2>
+
+      <div class="section-nav">
+        <button id="admin-nav-users-btn" type="button" class="mode-btn is-active">Usuarios</button>
+        <button id="admin-nav-plans-btn" type="button" class="mode-btn-secondary">Planes</button>
       </div>
 
-      <p id="admin-generated-at" class="subtitle"></p>
+      <section id="admin-users-section">
+        <div class="cards-grid">
+          <article class="summary-card">
+            <h3>Usuarios</h3>
+            <p id="metric-total-users" class="metric-value">0</p>
+          </article>
+          <article class="summary-card">
+            <h3>Empleados</h3>
+            <p id="metric-total-employees" class="metric-value">0</p>
+          </article>
+          <article class="summary-card">
+            <h3>Productos</h3>
+            <p id="metric-total-products" class="metric-value">0</p>
+          </article>
+        </div>
 
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Nombre</th>
-              <th>Email</th>
-              <th>Telefono</th>
-              <th>Plan actual</th>
-              <th>Ultimo acceso</th>
-              <th>Fecha creacion</th>
-              <th>Fecha pago</th>
-              <th>Cantidad empleados</th>
-              <th>Cantidad productos</th>
-            </tr>
-          </thead>
-          <tbody id="admin-users-table-body">
-            <tr>
-              <td colspan="9">Sin datos.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+        <p id="admin-generated-at" class="subtitle"></p>
+
+        <div class="users-filters">
+          <label for="admin-users-search" class="users-filters-label">Buscar usuario</label>
+          <input
+            id="admin-users-search"
+            type="search"
+            placeholder="Negocio, email, direccion o nombre de usuario"
+            autocomplete="off"
+          >
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Email</th>
+                <th>Telefono</th>
+                <th>Negocio</th>
+                <th>Direccion</th>
+                <th>Plan actual</th>
+                <th>Ultimo acceso</th>
+                <th>Fecha creacion</th>
+                <th>Fecha pago</th>
+                <th>Cantidad empleados</th>
+                <th>Cantidad productos</th>
+              </tr>
+            </thead>
+            <tbody id="admin-users-table-body">
+              <tr>
+                <td colspan="11">Sin datos.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="admin-plans-section" class="hidden">
+        <p class="subtitle">Selecciona un plan para editar sus datos.</p>
+        <p id="admin-plans-feedback" class="feedback" aria-live="polite"></p>
+
+        <div id="admin-plan-cards" class="plan-cards" aria-live="polite"></div>
+
+        <form id="admin-plan-form" class="plan-editor hidden">
+          <h3>Edicion de plan</h3>
+          <label for="admin-plan-id">ID</label>
+          <input id="admin-plan-id" type="text" readonly>
+
+          <label for="admin-plan-title">Titulo</label>
+          <input id="admin-plan-title" type="text" maxlength="80">
+
+          <label for="admin-plan-price">Precio</label>
+          <input id="admin-plan-price" type="text" maxlength="80">
+
+          <label for="admin-plan-description">Descripcion</label>
+          <textarea id="admin-plan-description" rows="3" maxlength="300"></textarea>
+
+          <label for="admin-plan-features">Caracteristicas (una por linea)</label>
+          <textarea id="admin-plan-features" rows="4" maxlength="900"></textarea>
+
+          <label for="admin-plan-max-employees">Maximo de empleados</label>
+          <input id="admin-plan-max-employees" type="number" min="0" step="1">
+
+          <label for="admin-plan-order">Orden</label>
+          <input id="admin-plan-order" type="number" min="0" step="1">
+
+          <label class="checkbox-field" for="admin-plan-active">
+            <input id="admin-plan-active" type="checkbox">
+            Plan activo
+          </label>
+
+          <button id="admin-plan-save-btn" type="submit">Guardar cambios</button>
+        </form>
+      </section>
     </section>
   </main>
 
