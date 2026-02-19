@@ -784,34 +784,49 @@ function resolvePlanValue(row) {
 }
 
 function parseMoneyValue(raw) {
-  const value = String(raw || "").replace(/[^0-9,.-]/g, "");
-  if (!value) return 0;
+  const text = String(raw || "").trim();
+  if (!text) return 0;
 
-  const lastComma = value.lastIndexOf(",");
-  const lastDot = value.lastIndexOf(".");
-  let normalized = "";
+  const hasCurrencyHint = /[$€£]|ars|usd|mxn|cop|clp|brl/i.test(text);
+  const numericMatch = text.match(/-?\d[\d.,]*/);
+  if (!numericMatch) return 0;
 
-  if (lastComma === -1 && lastDot === -1) {
-    normalized = value.replace(/[.,]/g, "");
-  } else {
-    const useComma = lastComma > lastDot;
-    const separator = useComma ? "," : ".";
-    const lastIndex = value.lastIndexOf(separator);
-    const intPart = value.slice(0, lastIndex).replace(/[.,]/g, "");
-    let decimalPart = value.slice(lastIndex + 1).replace(/[.,]/g, "");
-
-    if ((separator === "." && lastComma === -1 && decimalPart.length === 3) ||
-      (separator === "," && lastDot === -1 && decimalPart.length === 3)) {
-      normalized = `${intPart}${decimalPart}`;
-    } else {
-      decimalPart = decimalPart.slice(0, 2);
-      normalized = `${intPart}.${decimalPart}`;
-    }
+  // Evita tomar valores no monetarios de textos como "7 dias" cuando no hay pista de moneda.
+  if (!hasCurrencyHint && !/^-?\d+(?:[.,]\d+)?$/.test(text)) {
+    return 0;
   }
 
-  const numeric = Number(normalized);
+  const numeric = Number(normalizeNumericToken(numericMatch[0]));
   if (!Number.isFinite(numeric) || numeric < 0) return 0;
   return numeric;
+}
+
+function normalizeNumericToken(value) {
+  const token = String(value || "").trim();
+  if (!token) return "0";
+
+  const lastComma = token.lastIndexOf(",");
+  const lastDot = token.lastIndexOf(".");
+
+  if (lastComma === -1 && lastDot === -1) {
+    return token.replace(/[^\d-]/g, "");
+  }
+
+  const useComma = lastComma > lastDot;
+  const separator = useComma ? "," : ".";
+  const lastIndex = token.lastIndexOf(separator);
+  const intPart = token.slice(0, lastIndex).replace(/[^\d-]/g, "");
+  let decimalPart = token.slice(lastIndex + 1).replace(/[^\d]/g, "");
+
+  if (
+    (separator === "." && lastComma === -1 && decimalPart.length === 3) ||
+    (separator === "," && lastDot === -1 && decimalPart.length === 3)
+  ) {
+    return `${intPart}${decimalPart}`;
+  }
+
+  decimalPart = decimalPart.slice(0, 2);
+  return decimalPart ? `${intPart}.${decimalPart}` : intPart;
 }
 
 function formatMoney(value) {
