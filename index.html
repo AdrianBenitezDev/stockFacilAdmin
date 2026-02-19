@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>StockFacil Admin</title>
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top-banner">
+    <div class="top-banner-inner">
+      <strong class="top-banner-title">StockFacil Admin</strong>
+      <div class="top-banner-controls">
+        <button id="admin-refresh-btn" type="button" class="mode-btn-secondary hidden">Actualizar</button>
+        <button id="admin-logout-btn" type="button" class="mode-btn-secondary hidden">Cerrar sesion</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="admin-login-panel" class="panel">
+      <h1>Panel administrador</h1>
+      <p class="subtitle">Acceso restringido a una sola cuenta.</p>
+      <button id="admin-login-btn" type="button">Ingresar con Google</button>
+      <p id="admin-feedback" class="feedback" aria-live="polite"></p>
+    </section>
+
+    <section id="admin-dashboard-panel" class="panel hidden">
+      <h2>Resumen de clientes</h2>
+      <div class="cards-grid">
+        <article class="summary-card">
+          <h3>Usuarios</h3>
+          <p id="metric-total-users" class="metric-value">0</p>
+        </article>
+        <article class="summary-card">
+          <h3>Empleados</h3>
+          <p id="metric-total-employees" class="metric-value">0</p>
+        </article>
+        <article class="summary-card">
+          <h3>Productos</h3>
+          <p id="metric-total-products" class="metric-value">0</p>
+        </article>
+      </div>
+
+      <p id="admin-generated-at" class="subtitle"></p>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Email</th>
+              <th>Telefono</th>
+              <th>Plan actual</th>
+              <th>Ultimo acceso</th>
+              <th>Fecha creacion</th>
+              <th>Fecha pago</th>
+              <th>Cantidad empleados</th>
+              <th>Cantidad productos</th>
+            </tr>
+          </thead>
+          <tbody id="admin-users-table-body">
+            <tr>
+              <td colspan="9">Sin datos.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
+
