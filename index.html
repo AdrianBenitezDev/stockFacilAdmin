@@ -49,6 +49,10 @@
             <h3>Productos</h3>
             <p id="metric-total-products" class="metric-value">0</p>
           </article>
+          <article class="summary-card">
+            <h3>Estimado</h3>
+            <p id="metric-estimated-revenue" class="metric-value">$0,00 / mes</p>
+          </article>
         </div>
 
         <p id="admin-generated-at" class="subtitle"></p>
@@ -87,6 +91,36 @@
             </tbody>
           </table>
         </div>
+
+        <section id="admin-user-actions-panel" class="user-actions-panel hidden">
+          <h3>Acciones de cuenta</h3>
+          <p id="admin-selected-user-meta" class="subtitle">Selecciona un usuario para administrar su cuenta.</p>
+
+          <div class="user-actions-buttons">
+            <button id="admin-toggle-user-status-btn" type="button" class="mode-btn-secondary">Suspender cuenta</button>
+            <button id="admin-open-whatsapp-btn" type="button">Abrir WhatsApp</button>
+          </div>
+
+          <h4>Empleados actuales</h4>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Email</th>
+                  <th>Telefono</th>
+                  <th>Estado</th>
+                  <th>Accion</th>
+                </tr>
+              </thead>
+              <tbody id="admin-employees-table-body">
+                <tr>
+                  <td colspan="5">Selecciona un usuario para ver sus empleados.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
       </section>
 
       <section id="admin-plans-section" class="hidden">

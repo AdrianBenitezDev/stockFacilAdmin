@@ -120,7 +120,7 @@ button:hover {
 
 .cards-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.7rem;
 }
 
@@ -188,6 +188,18 @@ td {
   border-bottom: 1px solid var(--line);
   padding: 0.6rem;
   font-size: 0.95rem;
+}
+
+#admin-users-table-body tr[data-user-uid] {
+  cursor: pointer;
+}
+
+#admin-users-table-body tr[data-user-uid]:hover {
+  background: #f8fafc;
+}
+
+#admin-users-table-body tr.is-selected {
+  background: #ecfeff;
 }
 
 thead th {
@@ -269,6 +281,31 @@ thead th {
   margin: 0;
 }
 
+.user-actions-panel {
+  margin-top: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.9rem;
+  background: #f8fafc;
+}
+
+.user-actions-panel h3,
+.user-actions-panel h4 {
+  margin-top: 0;
+}
+
+.user-actions-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-bottom: 0.7rem;
+}
+
+.employee-toggle-btn {
+  margin-top: 0;
+  padding: 0.45rem 0.7rem;
+}
+
 @media (max-width: 640px) {
   body {
     padding-top: 62px;
@@ -291,5 +328,9 @@ thead th {
 
   .plan-cards {
     grid-template-columns: 1fr;
+  }
+
+  .user-actions-buttons {
+    flex-direction: column;
   }
 }

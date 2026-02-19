@@ -38,9 +38,15 @@ const plansSection = document.getElementById("admin-plans-section");
 const usersSearchInput = document.getElementById("admin-users-search");
 const generatedAtNode = document.getElementById("admin-generated-at");
 const tableBody = document.getElementById("admin-users-table-body");
+const userActionsPanel = document.getElementById("admin-user-actions-panel");
+const selectedUserMeta = document.getElementById("admin-selected-user-meta");
+const toggleUserStatusBtn = document.getElementById("admin-toggle-user-status-btn");
+const openWhatsappBtn = document.getElementById("admin-open-whatsapp-btn");
+const employeesTableBody = document.getElementById("admin-employees-table-body");
 const metricTotalUsers = document.getElementById("metric-total-users");
 const metricTotalEmployees = document.getElementById("metric-total-employees");
 const metricTotalProducts = document.getElementById("metric-total-products");
+const metricEstimatedRevenue = document.getElementById("metric-estimated-revenue");
 const plansFeedbackNode = document.getElementById("admin-plans-feedback");
 const planCardsNode = document.getElementById("admin-plan-cards");
 const planForm = document.getElementById("admin-plan-form");
@@ -58,6 +64,9 @@ let allUserRows = [];
 let allPlans = [];
 let selectedPlanId = "";
 let activeSection = "users";
+let selectedUserUid = "";
+let selectedUserRow = null;
+let selectedEmployees = [];
 
 init().catch((error) => {
   console.error(error);
@@ -73,8 +82,12 @@ async function init() {
   navUsersBtn?.addEventListener("click", () => setActiveSection("users"));
   navPlansBtn?.addEventListener("click", () => setActiveSection("plans"));
   usersSearchInput?.addEventListener("input", applyUsersFilter);
+  tableBody?.addEventListener("click", handleUserRowClick);
   planCardsNode?.addEventListener("click", handlePlanCardClick);
   planForm?.addEventListener("submit", handlePlanSave);
+  toggleUserStatusBtn?.addEventListener("click", handleToggleUserStatus);
+  openWhatsappBtn?.addEventListener("click", openSelectedUserWhatsapp);
+  employeesTableBody?.addEventListener("click", handleEmployeeToggleClick);
 
   onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -157,6 +170,18 @@ async function loadOverview() {
 
 function renderOverview(payload) {
   allUserRows = Array.isArray(payload?.rows) ? payload.rows : [];
+  if (selectedUserUid) {
+    selectedUserRow =
+      allUserRows.find((row) => String(row?.uid || "").trim() === selectedUserUid) || null;
+    if (!selectedUserRow) {
+      selectedUserUid = "";
+      selectedEmployees = [];
+      userActionsPanel?.classList.add("hidden");
+      setEmployeesPlaceholder("Selecciona un usuario para ver sus empleados.");
+    } else {
+      renderSelectedUserActions();
+    }
+  }
   generatedAtNode.textContent = payload?.generatedAt
     ? `Ultima actualizacion: ${formatDate(payload.generatedAt)}`
     : "";
@@ -168,6 +193,7 @@ function renderOverview(payload) {
   metricTotalProducts.textContent = String(
     allUserRows.reduce((acc, row) => acc + Number(row?.cantidadProductos || 0), 0)
   );
+  updateEstimatedRevenueMetric();
   applyUsersFilter();
 }
 
@@ -194,8 +220,10 @@ function applyUsersFilter() {
 
   tableBody.innerHTML = rows
     .map((row) => {
+      const isSelected = selectedUserUid && selectedUserUid === String(row?.uid || "").trim();
+      const rowClass = isSelected ? ' class="is-selected"' : "";
       return [
-        "<tr>",
+        `<tr data-user-uid="${escapeHtml(String(row.uid || ""))}"${rowClass}>`,
         `<td>${escapeHtml(row.nombre || "-")}</td>`,
         `<td>${escapeHtml(row.email || "-")}</td>`,
         `<td>${escapeHtml(row.telefono || "-")}</td>`,
@@ -213,6 +241,31 @@ function applyUsersFilter() {
     .join("");
 }
 
+function handleUserRowClick(event) {
+  const rowNode = event.target.closest("tr[data-user-uid]");
+  if (!rowNode) return;
+  const uid = String(rowNode.getAttribute("data-user-uid") || "").trim();
+  if (!uid) return;
+
+  const row = allUserRows.find((entry) => String(entry?.uid || "").trim() === uid);
+  if (!row) return;
+
+  selectUserRow(row);
+}
+
+async function selectUserRow(row) {
+  selectedUserUid = String(row?.uid || "").trim();
+  selectedUserRow = row || null;
+  selectedEmployees = [];
+
+  applyUsersFilter();
+  renderSelectedUserActions();
+  userActionsPanel?.classList.remove("hidden");
+  setEmployeesLoading();
+
+  await loadSelectedUserDetails();
+}
+
 function getAdminOverviewEndpoint() {
   const projectId = String(firebaseConfig?.projectId || "").trim();
   return `https://us-central1-${projectId}.cloudfunctions.net/adminGetUsersOverview`;
@@ -221,6 +274,11 @@ function getAdminOverviewEndpoint() {
 function getAdminPlansEndpoint() {
   const projectId = String(firebaseConfig?.projectId || "").trim();
   return `https://us-central1-${projectId}.cloudfunctions.net/adminManagePlans`;
+}
+
+function getAdminAccountsEndpoint() {
+  const projectId = String(firebaseConfig?.projectId || "").trim();
+  return `https://us-central1-${projectId}.cloudfunctions.net/adminManageAccounts`;
 }
 
 async function loadPlans() {
@@ -245,6 +303,7 @@ async function loadPlans() {
 
     allPlans = normalizePlans(result?.plans);
     renderPlanCards(allPlans);
+    updateEstimatedRevenueMetric();
     setPlansFeedback("");
     if (!allPlans.length) {
       selectedPlanId = "";
@@ -389,9 +448,15 @@ function showLoggedOutState() {
   allUserRows = [];
   allPlans = [];
   selectedPlanId = "";
+  selectedUserUid = "";
+  selectedUserRow = null;
+  selectedEmployees = [];
   tableBody.innerHTML = '<tr><td colspan="11">Sin datos.</td></tr>';
+  if (metricEstimatedRevenue) metricEstimatedRevenue.textContent = "$0,00 / mes";
   if (planCardsNode) planCardsNode.innerHTML = "";
   planForm?.classList.add("hidden");
+  userActionsPanel?.classList.add("hidden");
+  setEmployeesPlaceholder("Selecciona un usuario para ver sus empleados.");
 }
 
 function showLoggedInState() {
@@ -463,4 +528,270 @@ function toPositiveInteger(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric) || numeric < 0) return 0;
   return Math.trunc(numeric);
+}
+
+function renderSelectedUserActions() {
+  if (!selectedUserRow) {
+    userActionsPanel?.classList.add("hidden");
+    return;
+  }
+
+  const nombre = selectedUserRow?.nombre || "-";
+  const negocio = selectedUserRow?.nombreNegocio || "-";
+  const estado = selectedUserRow?.activo === false ? "suspendida" : "activa";
+  if (selectedUserMeta) {
+    selectedUserMeta.textContent = `${nombre} | ${negocio} | Cuenta ${estado}`;
+  }
+
+  const nextActionLabel =
+    selectedUserRow?.activo === false ? "Habilitar cuenta" : "Suspender cuenta";
+  if (toggleUserStatusBtn) {
+    toggleUserStatusBtn.textContent = nextActionLabel;
+    toggleUserStatusBtn.disabled = false;
+  }
+
+  const phoneDigits = sanitizePhoneToDigits(selectedUserRow?.telefono);
+  if (openWhatsappBtn) {
+    openWhatsappBtn.disabled = !phoneDigits;
+  }
+}
+
+async function loadSelectedUserDetails() {
+  if (!selectedUserRow || !auth.currentUser) return;
+
+  try {
+    const token = await auth.currentUser.getIdToken(true);
+    const params = new URLSearchParams({
+      uid: String(selectedUserRow?.uid || "").trim(),
+      tenantId: String(selectedUserRow?.tenantId || "").trim()
+    });
+    const response = await fetch(`${getAdminAccountsEndpoint()}?${params.toString()}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      throw new Error(result?.error || "No se pudieron cargar los detalles de la cuenta.");
+    }
+
+    if (result?.employer) {
+      selectedUserRow = {
+        ...selectedUserRow,
+        activo: result.employer.activo !== false
+      };
+      allUserRows = allUserRows.map((row) =>
+        String(row?.uid || "").trim() === selectedUserUid
+          ? { ...row, activo: selectedUserRow.activo }
+          : row
+      );
+      applyUsersFilter();
+      renderSelectedUserActions();
+    }
+
+    selectedEmployees = Array.isArray(result?.employees) ? result.employees : [];
+    renderEmployeesTable();
+  } catch (error) {
+    console.error(error);
+    setEmployeesPlaceholder(error.message || "No se pudieron cargar los empleados.");
+  }
+}
+
+async function handleToggleUserStatus() {
+  if (!selectedUserRow || !auth.currentUser) return;
+
+  const nextActive = selectedUserRow?.activo === false;
+  if (toggleUserStatusBtn) toggleUserStatusBtn.disabled = true;
+
+  try {
+    const token = await auth.currentUser.getIdToken(true);
+    const response = await fetch(getAdminAccountsEndpoint(), {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        targetType: "employer",
+        uid: String(selectedUserRow?.uid || "").trim(),
+        tenantId: String(selectedUserRow?.tenantId || "").trim(),
+        active: nextActive
+      })
+    });
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      throw new Error(result?.error || "No se pudo actualizar la cuenta.");
+    }
+
+    selectedUserRow = {
+      ...selectedUserRow,
+      activo: result?.employer?.activo !== false
+    };
+    allUserRows = allUserRows.map((row) =>
+      String(row?.uid || "").trim() === selectedUserUid
+        ? { ...row, activo: selectedUserRow.activo }
+        : row
+    );
+    applyUsersFilter();
+    renderSelectedUserActions();
+  } catch (error) {
+    console.error(error);
+    setFeedback(error.message || "No se pudo actualizar la cuenta del usuario.");
+  } finally {
+    if (toggleUserStatusBtn) toggleUserStatusBtn.disabled = false;
+  }
+}
+
+function openSelectedUserWhatsapp() {
+  if (!selectedUserRow) return;
+  const digits = sanitizePhoneToDigits(selectedUserRow?.telefono);
+  if (!digits) return;
+  window.open(`https://wa.me/${digits}`, "_blank", "noopener,noreferrer");
+}
+
+function sanitizePhoneToDigits(value) {
+  const digits = String(value || "").replace(/\D/g, "");
+  return digits.length >= 6 ? digits : "";
+}
+
+function setEmployeesLoading() {
+  if (!employeesTableBody) return;
+  employeesTableBody.innerHTML = '<tr><td colspan="5">Cargando empleados...</td></tr>';
+}
+
+function setEmployeesPlaceholder(message) {
+  if (!employeesTableBody) return;
+  employeesTableBody.innerHTML = `<tr><td colspan="5">${escapeHtml(String(message || "Sin datos."))}</td></tr>`;
+}
+
+function renderEmployeesTable() {
+  if (!employeesTableBody) return;
+  if (!selectedEmployees.length) {
+    setEmployeesPlaceholder("No hay empleados para este usuario.");
+    return;
+  }
+
+  employeesTableBody.innerHTML = selectedEmployees
+    .map((employee) => {
+      const active = employee?.activo !== false;
+      const actionLabel = active ? "Deshabilitar" : "Habilitar";
+      return [
+        "<tr>",
+        `<td>${escapeHtml(employee?.nombre || "-")}</td>`,
+        `<td>${escapeHtml(employee?.email || "-")}</td>`,
+        `<td>${escapeHtml(employee?.telefono || "-")}</td>`,
+        `<td>${escapeHtml(active ? "Activo" : "Inactivo")}</td>`,
+        `<td><button type="button" class="employee-toggle-btn mode-btn-secondary" data-employee-uid="${escapeHtml(String(employee?.uid || ""))}" data-next-active="${active ? "false" : "true"}">${actionLabel}</button></td>`,
+        "</tr>"
+      ].join("");
+    })
+    .join("");
+}
+
+async function handleEmployeeToggleClick(event) {
+  const target = event.target.closest("[data-employee-uid]");
+  if (!target || !auth.currentUser || !selectedUserRow) return;
+
+  const employeeUid = String(target.getAttribute("data-employee-uid") || "").trim();
+  const nextActive = String(target.getAttribute("data-next-active") || "").trim() === "true";
+  if (!employeeUid) return;
+
+  target.disabled = true;
+  try {
+    const token = await auth.currentUser.getIdToken(true);
+    const response = await fetch(getAdminAccountsEndpoint(), {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        targetType: "employee",
+        uid: employeeUid,
+        tenantId: String(selectedUserRow?.tenantId || "").trim(),
+        active: nextActive
+      })
+    });
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      throw new Error(result?.error || "No se pudo actualizar el empleado.");
+    }
+
+    const updated = result?.employee || {};
+    selectedEmployees = selectedEmployees.map((employee) =>
+      String(employee?.uid || "").trim() === String(updated?.uid || "").trim()
+        ? { ...employee, activo: updated?.activo !== false }
+        : employee
+    );
+    renderEmployeesTable();
+  } catch (error) {
+    console.error(error);
+    setFeedback(error.message || "No se pudo actualizar el empleado.");
+    target.disabled = false;
+  }
+}
+
+function updateEstimatedRevenueMetric() {
+  if (!metricEstimatedRevenue) return;
+  const total = allUserRows.reduce((acc, row) => acc + resolvePlanValue(row), 0);
+  metricEstimatedRevenue.textContent = `${formatMoney(total)} / mes`;
+}
+
+function resolvePlanValue(row) {
+  const planLabel = String(row?.planActual || "").trim();
+  if (!planLabel) return 0;
+
+  const normalizedPlan = normalizeText(planLabel);
+  const matchedPlan = allPlans.find((plan) => {
+    const byId = normalizeText(plan?.id || "");
+    const byTitle = normalizeText(plan?.titulo || "");
+    return normalizedPlan === byId || normalizedPlan === byTitle;
+  });
+
+  if (matchedPlan) {
+    return parseMoneyValue(matchedPlan.precio);
+  }
+
+  return parseMoneyValue(planLabel);
+}
+
+function parseMoneyValue(raw) {
+  const value = String(raw || "").replace(/[^0-9,.-]/g, "");
+  if (!value) return 0;
+
+  const lastComma = value.lastIndexOf(",");
+  const lastDot = value.lastIndexOf(".");
+  let normalized = "";
+
+  if (lastComma === -1 && lastDot === -1) {
+    normalized = value.replace(/[.,]/g, "");
+  } else {
+    const useComma = lastComma > lastDot;
+    const separator = useComma ? "," : ".";
+    const lastIndex = value.lastIndexOf(separator);
+    const intPart = value.slice(0, lastIndex).replace(/[.,]/g, "");
+    let decimalPart = value.slice(lastIndex + 1).replace(/[.,]/g, "");
+
+    if ((separator === "." && lastComma === -1 && decimalPart.length === 3) ||
+      (separator === "," && lastDot === -1 && decimalPart.length === 3)) {
+      normalized = `${intPart}${decimalPart}`;
+    } else {
+      decimalPart = decimalPart.slice(0, 2);
+      normalized = `${intPart}.${decimalPart}`;
+    }
+  }
+
+  const numeric = Number(normalized);
+  if (!Number.isFinite(numeric) || numeric < 0) return 0;
+  return numeric;
+}
+
+function formatMoney(value) {
+  return `$${Number(value || 0).toLocaleString("es-AR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
 }
