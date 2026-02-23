@@ -230,7 +230,7 @@ function applyUsersFilter() {
         `<td>${escapeHtml(row.email || "-")}</td>`,
         `<td>${escapeHtml(row.telefono || "-")}</td>`,
         `<td>${escapeHtml(row.nombreNegocio || "-")}</td>`,
-        `<td>${escapeHtml(row.direccionNegocio || "-")}</td>`,
+        `<td>${escapeHtml((row.direccionNegocio || "-").slice(0, 10))}</td>`
         `<td>${escapeHtml(row.planActual || "-")}</td>`,
         `<td>${escapeHtml(formatDate(row.ultimoAcceso))}</td>`,
         `<td>${escapeHtml(formatDate(row.fechaCreacion))}</td>`,
