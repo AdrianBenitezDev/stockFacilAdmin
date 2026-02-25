@@ -32,9 +32,11 @@ const loginBtn = document.getElementById("admin-login-btn");
 const logoutBtn = document.getElementById("admin-logout-btn");
 const refreshBtn = document.getElementById("admin-refresh-btn");
 const navUsersBtn = document.getElementById("admin-nav-users-btn");
+const navProductsBtn = document.getElementById("admin-nav-products-btn");
 const navPlansBtn = document.getElementById("admin-nav-plans-btn");
 const usersSection = document.getElementById("admin-users-section");
 const plansSection = document.getElementById("admin-plans-section");
+const productsSection = document.getElementById("admin-products-section");
 const usersSearchInput = document.getElementById("admin-users-search");
 const globalLoadingNode = document.getElementById("admin-global-loading");
 const generatedAtNode = document.getElementById("admin-generated-at");
@@ -83,6 +85,9 @@ async function init() {
   refreshBtn?.addEventListener("click", handleRefresh);
   navUsersBtn?.addEventListener("click", () => setActiveSection("users"));
   navPlansBtn?.addEventListener("click", () => setActiveSection("plans"));
+  
+  navProductsBtn?.addEventListener("click", () => setActiveSection("products"));
+  
   usersSearchInput?.addEventListener("input", applyUsersFilter);
   tableBody?.addEventListener("click", handleUserRowClick);
   planCardsNode?.addEventListener("click", handlePlanCardClick);
@@ -473,11 +478,16 @@ function showLoggedInState() {
 
 function setActiveSection(sectionId) {
   activeSection = sectionId === "plans" ? "plans" : "users";
+  activeSection = sectionId === "products" ? "products" : activeSection;
 
   usersSection?.classList.toggle("hidden", activeSection !== "users");
   plansSection?.classList.toggle("hidden", activeSection !== "plans");
+  productsSection?.classList.toggle("hidden", activeSection !== "products");
+
+
   navUsersBtn?.classList.toggle("is-active", activeSection === "users");
   navPlansBtn?.classList.toggle("is-active", activeSection === "plans");
+  navProductsBtn?.classList.toggle("is-active", activeSection === "products");
 }
 
 function setFeedback(message) {

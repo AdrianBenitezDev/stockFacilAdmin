@@ -1,0 +1,2 @@
+necesito poder enviar mails de resend a los usuarios comunicando la fecha de pago
+necesito poder enviar mails de resend a los usuarios comunicandoles las actualizaciones del producto
