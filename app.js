@@ -62,6 +62,10 @@ const planMaxEmployeesInput = document.getElementById("admin-plan-max-employees"
 const planOrderInput = document.getElementById("admin-plan-order");
 const planActiveInput = document.getElementById("admin-plan-active");
 const planSaveBtn = document.getElementById("admin-plan-save-btn");
+const productsFeedbackNode = document.getElementById("admin-products-feedback");
+const productsUserSelect = document.getElementById("admin-products-user-select");
+const productsSearchInput = document.getElementById("admin-products-search");
+const productsTableBody = document.getElementById("admin-products-table-body");
 
 let allUserRows = [];
 let allPlans = [];
@@ -70,6 +74,11 @@ let activeSection = "users";
 let selectedUserUid = "";
 let selectedUserRow = null;
 let selectedEmployees = [];
+let selectedProductsUserUid = "";
+let selectedProductsTenantId = "";
+let allProductRows = [];
+let productsSearchDebounce = null;
+let latestProductsRequestId = 0;
 let pendingGlobalLoads = 0;
 
 init().catch((error) => {
@@ -85,10 +94,10 @@ async function init() {
   refreshBtn?.addEventListener("click", handleRefresh);
   navUsersBtn?.addEventListener("click", () => setActiveSection("users"));
   navPlansBtn?.addEventListener("click", () => setActiveSection("plans"));
-  
   navProductsBtn?.addEventListener("click", () => setActiveSection("products"));
-  
   usersSearchInput?.addEventListener("input", applyUsersFilter);
+  productsUserSelect?.addEventListener("change", handleProductsUserSelectChange);
+  productsSearchInput?.addEventListener("input", handleProductsSearchInput);
   tableBody?.addEventListener("click", handleUserRowClick);
   planCardsNode?.addEventListener("click", handlePlanCardClick);
   planForm?.addEventListener("submit", handlePlanSave);
@@ -132,6 +141,10 @@ async function handleLogout() {
 async function handleRefresh() {
   if (activeSection === "plans") {
     await loadPlans();
+    return;
+  }
+  if (activeSection === "products") {
+    await loadProductsForSelectedUser();
     return;
   }
   await loadOverview();
@@ -201,6 +214,7 @@ function renderOverview(payload) {
     allUserRows.reduce((acc, row) => acc + Number(row?.cantidadProductos || 0), 0)
   );
   updateEstimatedRevenueMetric();
+  renderProductsUserOptions();
   applyUsersFilter();
 }
 
@@ -286,6 +300,174 @@ function getAdminPlansEndpoint() {
 function getAdminAccountsEndpoint() {
   const projectId = String(firebaseConfig?.projectId || "").trim();
   return `https://us-central1-${projectId}.cloudfunctions.net/adminManageAccounts`;
+}
+
+function getAdminProductsEndpoint() {
+  const projectId = String(firebaseConfig?.projectId || "").trim();
+  return `https://us-central1-${projectId}.cloudfunctions.net/adminManageProducts`;
+}
+
+function renderProductsUserOptions() {
+  if (!productsUserSelect) return;
+
+  const activeUsers = allUserRows
+    .filter((row) => row?.activo !== false && String(row?.tenantId || "").trim())
+    .map((row) => ({
+      uid: String(row?.uid || "").trim(),
+      tenantId: String(row?.tenantId || "").trim(),
+      label: `${String(row?.nombre || "-").trim()} | ${String(row?.nombreNegocio || "-").trim()}`
+    }));
+
+  const previousUserUid = selectedProductsUserUid;
+  const nextUserUid =
+    previousUserUid && activeUsers.some((item) => item.uid === previousUserUid)
+      ? previousUserUid
+      : activeUsers[0]?.uid || "";
+  const selectedUser = activeUsers.find((item) => item.uid === nextUserUid) || null;
+
+  selectedProductsUserUid = nextUserUid;
+  selectedProductsTenantId = selectedUser?.tenantId || "";
+  productsUserSelect.innerHTML =
+    `<option value="">Selecciona un usuario...</option>` +
+    activeUsers
+      .map(
+        (item) =>
+          `<option value="${escapeHtml(item.uid)}"${item.uid === selectedProductsUserUid ? " selected" : ""}>${escapeHtml(item.label)}</option>`
+      )
+      .join("");
+  productsUserSelect.disabled = activeUsers.length === 0;
+
+  if (!activeUsers.length) {
+    allProductRows = [];
+    setProductsPlaceholder("No hay usuarios activos para consultar productos.");
+    setProductsFeedback("");
+    return;
+  }
+
+  if (activeSection === "products") {
+    void loadProductsForSelectedUser();
+  }
+}
+
+function handleProductsUserSelectChange() {
+  const uid = String(productsUserSelect?.value || "").trim();
+  const row = allUserRows.find((entry) => String(entry?.uid || "").trim() === uid);
+  selectedProductsUserUid = uid;
+  selectedProductsTenantId = String(row?.tenantId || "").trim();
+  allProductRows = [];
+  void loadProductsForSelectedUser();
+}
+
+function handleProductsSearchInput() {
+  if (productsSearchDebounce) {
+    clearTimeout(productsSearchDebounce);
+  }
+  productsSearchDebounce = setTimeout(() => {
+    void loadProductsForSelectedUser();
+  }, 300);
+}
+
+async function loadProductsForSelectedUser() {
+  if (!auth.currentUser) return;
+  if (!selectedProductsTenantId) {
+    allProductRows = [];
+    setProductsPlaceholder("Selecciona un usuario activo para ver productos.");
+    setProductsFeedback("");
+    return;
+  }
+
+  const requestId = ++latestProductsRequestId;
+  const query = String(productsSearchInput?.value || "").trim();
+  setProductsFeedback("Buscando productos...");
+  if (productsTableBody) {
+    productsTableBody.innerHTML = '<tr><td colspan="6">Cargando productos...</td></tr>';
+  }
+
+  try {
+    const token = await auth.currentUser.getIdToken(true);
+    const params = new URLSearchParams({
+      tenantId: selectedProductsTenantId
+    });
+    if (query) {
+      params.set("q", query);
+    }
+
+    const response = await fetchWithLoading(`${getAdminProductsEndpoint()}?${params.toString()}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      throw new Error(result?.error || "No se pudieron cargar los productos.");
+    }
+    if (requestId !== latestProductsRequestId) return;
+
+    allProductRows = normalizeProductRows(result?.products || result?.rows || []);
+    renderProductsTable(allProductRows);
+    setProductsFeedback(
+      allProductRows.length
+        ? `${allProductRows.length} producto(s) encontrado(s).`
+        : "Sin coincidencias para la busqueda."
+    );
+  } catch (error) {
+    console.error(error);
+    if (requestId !== latestProductsRequestId) return;
+    allProductRows = [];
+    setProductsPlaceholder(error.message || "No se pudieron cargar productos.");
+    setProductsFeedback(error.message || "No se pudieron cargar productos.");
+  }
+}
+
+function normalizeProductRows(source) {
+  if (!Array.isArray(source)) return [];
+  return source
+    .map((row) => {
+      const codigo = String(row?.codigo || row?.barcode || row?.id || "").trim();
+      const nombre = String(row?.nombre || row?.name || "").trim();
+      const categoria = String(row?.categoria || row?.category || "").trim();
+      const stock = Number(row?.stock || 0);
+      const precioVenta = Number(row?.precioVenta ?? row?.price ?? 0);
+      const precioCompra = Number(row?.precioCompra ?? row?.providerCost ?? row?.costoProveedor ?? 0);
+      return {
+        codigo: codigo || "-",
+        nombre: nombre || "-",
+        categoria: categoria || "-",
+        stock: Number.isFinite(stock) ? stock : 0,
+        precioVenta: Number.isFinite(precioVenta) ? precioVenta : 0,
+        precioCompra: Number.isFinite(precioCompra) ? precioCompra : 0
+      };
+    })
+    .sort((a, b) => {
+      const byCategory = String(a.categoria || "").localeCompare(String(b.categoria || ""));
+      if (byCategory !== 0) return byCategory;
+      return String(a.nombre || "").localeCompare(String(b.nombre || ""));
+    });
+}
+
+function renderProductsTable(rows) {
+  if (!productsTableBody) return;
+  if (!rows.length) {
+    setProductsPlaceholder("No hay productos para este usuario.");
+    return;
+  }
+
+  productsTableBody.innerHTML = rows
+    .map((row) =>
+      [
+        "<tr>",
+        `<td>${escapeHtml(row.codigo)}</td>`,
+        `<td>${escapeHtml(row.nombre)}</td>`,
+        `<td>${escapeHtml(row.categoria)}</td>`,
+        `<td>${Number(row.stock || 0)}</td>`,
+        `<td>${escapeHtml(formatMoney(row.precioVenta))}</td>`,
+        `<td>${escapeHtml(formatMoney(row.precioCompra))}</td>`,
+        "</tr>"
+      ].join("")
+    )
+    .join("");
 }
 
 async function loadPlans() {
@@ -458,10 +640,25 @@ function showLoggedOutState() {
   selectedUserUid = "";
   selectedUserRow = null;
   selectedEmployees = [];
+  selectedProductsUserUid = "";
+  selectedProductsTenantId = "";
+  allProductRows = [];
+  latestProductsRequestId = 0;
+  if (productsSearchDebounce) {
+    clearTimeout(productsSearchDebounce);
+    productsSearchDebounce = null;
+  }
   pendingGlobalLoads = 0;
   tableBody.innerHTML = '<tr><td colspan="11">Sin datos.</td></tr>';
   if (metricEstimatedRevenue) metricEstimatedRevenue.textContent = "$0,00 / mes";
   if (planCardsNode) planCardsNode.innerHTML = "";
+  if (productsUserSelect) {
+    productsUserSelect.innerHTML = '<option value="">Selecciona un usuario...</option>';
+    productsUserSelect.disabled = true;
+  }
+  if (productsSearchInput) productsSearchInput.value = "";
+  setProductsPlaceholder("Selecciona un usuario activo para ver productos.");
+  setProductsFeedback("");
   planForm?.classList.add("hidden");
   userActionsPanel?.classList.add("hidden");
   globalLoadingNode?.classList.add("hidden");
@@ -488,6 +685,10 @@ function setActiveSection(sectionId) {
   navUsersBtn?.classList.toggle("is-active", activeSection === "users");
   navPlansBtn?.classList.toggle("is-active", activeSection === "plans");
   navProductsBtn?.classList.toggle("is-active", activeSection === "products");
+
+  if (activeSection === "products" && selectedProductsTenantId) {
+    void loadProductsForSelectedUser();
+  }
 }
 
 function setFeedback(message) {
@@ -505,6 +706,16 @@ function setTableError(message) {
 function setPlansFeedback(message) {
   if (!plansFeedbackNode) return;
   plansFeedbackNode.textContent = String(message || "");
+}
+
+function setProductsFeedback(message) {
+  if (!productsFeedbackNode) return;
+  productsFeedbackNode.textContent = String(message || "");
+}
+
+function setProductsPlaceholder(message) {
+  if (!productsTableBody) return;
+  productsTableBody.innerHTML = `<tr><td colspan="6">${escapeHtml(String(message || "Sin datos."))}</td></tr>`;
 }
 
 function toggleActionButtons(loading) {

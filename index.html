@@ -170,8 +170,47 @@
       </section>
 
       <section id="admin-products-section" class="hidden">
-        <p class="subtitle">Gestion de productos.</p>
+        <p class="subtitle">Explora productos por usuario activo.</p>
         <p id="admin-products-feedback" class="feedback" aria-live="polite"></p>
+
+        <div class="products-filters">
+          <div class="products-filter-group">
+            <label for="admin-products-user-select" class="users-filters-label">Usuario activo</label>
+            <select id="admin-products-user-select">
+              <option value="">Selecciona un usuario...</option>
+            </select>
+          </div>
+
+          <div class="products-filter-group">
+            <label for="admin-products-search" class="users-filters-label">Buscar producto</label>
+            <input
+              id="admin-products-search"
+              type="search"
+              placeholder="Codigo, nombre o categoria"
+              autocomplete="off"
+            >
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Codigo</th>
+                <th>Nombre</th>
+                <th>Categoria</th>
+                <th>Stock</th>
+                <th>Precio venta</th>
+                <th>Precio compra</th>
+              </tr>
+            </thead>
+            <tbody id="admin-products-table-body">
+              <tr>
+                <td colspan="6">Selecciona un usuario activo para ver productos.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
 
 

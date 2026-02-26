@@ -200,6 +200,8 @@ button:hover {
 }
 
 #admin-users-search,
+#admin-products-user-select,
+#admin-products-search,
 .plan-editor input,
 .plan-editor textarea {
   border: 1px solid #cbd5e1;
@@ -210,10 +212,24 @@ button:hover {
 }
 
 #admin-users-search:focus,
+#admin-products-user-select:focus,
+#admin-products-search:focus,
 .plan-editor input:focus,
 .plan-editor textarea:focus {
   outline: 2px solid #99f6e4;
   border-color: var(--accent);
+}
+
+.products-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin-bottom: 0.75rem;
+}
+
+.products-filter-group {
+  display: grid;
+  gap: 0.4rem;
 }
 
 table {
@@ -366,6 +382,10 @@ thead th {
   }
 
   .plan-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .products-filters {
     grid-template-columns: 1fr;
   }
 
