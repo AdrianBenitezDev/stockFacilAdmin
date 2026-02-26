@@ -34,9 +34,13 @@ const refreshBtn = document.getElementById("admin-refresh-btn");
 const navUsersBtn = document.getElementById("admin-nav-users-btn");
 const navProductsBtn = document.getElementById("admin-nav-products-btn");
 const navPlansBtn = document.getElementById("admin-nav-plans-btn");
+const navSalesBtn = document.getElementById("admin-nav-sales-btn");
+const navCashboxesBtn = document.getElementById("admin-nav-cashboxes-btn");
 const usersSection = document.getElementById("admin-users-section");
 const plansSection = document.getElementById("admin-plans-section");
 const productsSection = document.getElementById("admin-products-section");
+const salesSection = document.getElementById("admin-sales-section");
+const cashboxesSection = document.getElementById("admin-cashboxes-section");
 const usersSearchInput = document.getElementById("admin-users-search");
 const globalLoadingNode = document.getElementById("admin-global-loading");
 const generatedAtNode = document.getElementById("admin-generated-at");
@@ -66,6 +70,14 @@ const productsFeedbackNode = document.getElementById("admin-products-feedback");
 const productsUserSelect = document.getElementById("admin-products-user-select");
 const productsSearchInput = document.getElementById("admin-products-search");
 const productsTableBody = document.getElementById("admin-products-table-body");
+const salesFeedbackNode = document.getElementById("admin-sales-feedback");
+const salesUserSelect = document.getElementById("admin-sales-user-select");
+const salesSearchInput = document.getElementById("admin-sales-search");
+const salesTableBody = document.getElementById("admin-sales-table-body");
+const cashboxesFeedbackNode = document.getElementById("admin-cashboxes-feedback");
+const cashboxesUserSelect = document.getElementById("admin-cashboxes-user-select");
+const cashboxesSearchInput = document.getElementById("admin-cashboxes-search");
+const cashboxesTableBody = document.getElementById("admin-cashboxes-table-body");
 
 let allUserRows = [];
 let allPlans = [];
@@ -79,6 +91,16 @@ let selectedProductsTenantId = "";
 let allProductRows = [];
 let productsSearchDebounce = null;
 let latestProductsRequestId = 0;
+let selectedSalesUserUid = "";
+let selectedSalesTenantId = "";
+let allSalesRows = [];
+let salesSearchDebounce = null;
+let latestSalesRequestId = 0;
+let selectedCashboxesUserUid = "";
+let selectedCashboxesTenantId = "";
+let allCashboxesRows = [];
+let cashboxesSearchDebounce = null;
+let latestCashboxesRequestId = 0;
 let pendingGlobalLoads = 0;
 
 init().catch((error) => {
@@ -95,9 +117,15 @@ async function init() {
   navUsersBtn?.addEventListener("click", () => setActiveSection("users"));
   navPlansBtn?.addEventListener("click", () => setActiveSection("plans"));
   navProductsBtn?.addEventListener("click", () => setActiveSection("products"));
+  navSalesBtn?.addEventListener("click", () => setActiveSection("sales"));
+  navCashboxesBtn?.addEventListener("click", () => setActiveSection("cashboxes"));
   usersSearchInput?.addEventListener("input", applyUsersFilter);
   productsUserSelect?.addEventListener("change", handleProductsUserSelectChange);
   productsSearchInput?.addEventListener("input", handleProductsSearchInput);
+  salesUserSelect?.addEventListener("change", handleSalesUserSelectChange);
+  salesSearchInput?.addEventListener("input", handleSalesSearchInput);
+  cashboxesUserSelect?.addEventListener("change", handleCashboxesUserSelectChange);
+  cashboxesSearchInput?.addEventListener("input", handleCashboxesSearchInput);
   tableBody?.addEventListener("click", handleUserRowClick);
   planCardsNode?.addEventListener("click", handlePlanCardClick);
   planForm?.addEventListener("submit", handlePlanSave);
@@ -145,6 +173,14 @@ async function handleRefresh() {
   }
   if (activeSection === "products") {
     await loadProductsForSelectedUser();
+    return;
+  }
+  if (activeSection === "sales") {
+    await loadSalesForSelectedUser();
+    return;
+  }
+  if (activeSection === "cashboxes") {
+    await loadCashboxesForSelectedUser();
     return;
   }
   await loadOverview();
@@ -215,6 +251,8 @@ function renderOverview(payload) {
   );
   updateEstimatedRevenueMetric();
   renderProductsUserOptions();
+  renderSalesUserOptions();
+  renderCashboxesUserOptions();
   applyUsersFilter();
 }
 
@@ -307,16 +345,30 @@ function getAdminProductsEndpoint() {
   return `https://us-central1-${projectId}.cloudfunctions.net/adminManageProducts`;
 }
 
-function renderProductsUserOptions() {
-  if (!productsUserSelect) return;
+function getAdminSalesEndpoint() {
+  const projectId = String(firebaseConfig?.projectId || "").trim();
+  return `https://us-central1-${projectId}.cloudfunctions.net/adminManageSales`;
+}
 
-  const activeUsers = allUserRows
+function getAdminCashboxesEndpoint() {
+  const projectId = String(firebaseConfig?.projectId || "").trim();
+  return `https://us-central1-${projectId}.cloudfunctions.net/adminManageCashboxes`;
+}
+
+function getActiveScopedUsers() {
+  return allUserRows
     .filter((row) => row?.activo !== false && String(row?.tenantId || "").trim())
     .map((row) => ({
       uid: String(row?.uid || "").trim(),
       tenantId: String(row?.tenantId || "").trim(),
       label: `${String(row?.nombre || "-").trim()} | ${String(row?.nombreNegocio || "-").trim()}`
     }));
+}
+
+function renderProductsUserOptions() {
+  if (!productsUserSelect) return;
+
+  const activeUsers = getActiveScopedUsers();
 
   const previousUserUid = selectedProductsUserUid;
   const nextUserUid =
@@ -346,6 +398,76 @@ function renderProductsUserOptions() {
 
   if (activeSection === "products") {
     void loadProductsForSelectedUser();
+  }
+}
+
+function renderSalesUserOptions() {
+  if (!salesUserSelect) return;
+
+  const activeUsers = getActiveScopedUsers();
+  const previousUserUid = selectedSalesUserUid;
+  const nextUserUid =
+    previousUserUid && activeUsers.some((item) => item.uid === previousUserUid)
+      ? previousUserUid
+      : activeUsers[0]?.uid || "";
+  const selectedUser = activeUsers.find((item) => item.uid === nextUserUid) || null;
+
+  selectedSalesUserUid = nextUserUid;
+  selectedSalesTenantId = selectedUser?.tenantId || "";
+  salesUserSelect.innerHTML =
+    `<option value="">Selecciona un usuario...</option>` +
+    activeUsers
+      .map(
+        (item) =>
+          `<option value="${escapeHtml(item.uid)}"${item.uid === selectedSalesUserUid ? " selected" : ""}>${escapeHtml(item.label)}</option>`
+      )
+      .join("");
+  salesUserSelect.disabled = activeUsers.length === 0;
+
+  if (!activeUsers.length) {
+    allSalesRows = [];
+    setSalesPlaceholder("No hay usuarios activos para consultar ventas.");
+    setSalesFeedback("");
+    return;
+  }
+
+  if (activeSection === "sales") {
+    void loadSalesForSelectedUser();
+  }
+}
+
+function renderCashboxesUserOptions() {
+  if (!cashboxesUserSelect) return;
+
+  const activeUsers = getActiveScopedUsers();
+  const previousUserUid = selectedCashboxesUserUid;
+  const nextUserUid =
+    previousUserUid && activeUsers.some((item) => item.uid === previousUserUid)
+      ? previousUserUid
+      : activeUsers[0]?.uid || "";
+  const selectedUser = activeUsers.find((item) => item.uid === nextUserUid) || null;
+
+  selectedCashboxesUserUid = nextUserUid;
+  selectedCashboxesTenantId = selectedUser?.tenantId || "";
+  cashboxesUserSelect.innerHTML =
+    `<option value="">Selecciona un usuario...</option>` +
+    activeUsers
+      .map(
+        (item) =>
+          `<option value="${escapeHtml(item.uid)}"${item.uid === selectedCashboxesUserUid ? " selected" : ""}>${escapeHtml(item.label)}</option>`
+      )
+      .join("");
+  cashboxesUserSelect.disabled = activeUsers.length === 0;
+
+  if (!activeUsers.length) {
+    allCashboxesRows = [];
+    setCashboxesPlaceholder("No hay usuarios activos para consultar cajas.");
+    setCashboxesFeedback("");
+    return;
+  }
+
+  if (activeSection === "cashboxes") {
+    void loadCashboxesForSelectedUser();
   }
 }
 
@@ -464,6 +586,236 @@ function renderProductsTable(rows) {
         `<td>${Number(row.stock || 0)}</td>`,
         `<td>${escapeHtml(formatMoney(row.precioVenta))}</td>`,
         `<td>${escapeHtml(formatMoney(row.precioCompra))}</td>`,
+        "</tr>"
+      ].join("")
+    )
+    .join("");
+}
+
+function handleSalesUserSelectChange() {
+  const uid = String(salesUserSelect?.value || "").trim();
+  const row = allUserRows.find((entry) => String(entry?.uid || "").trim() === uid);
+  selectedSalesUserUid = uid;
+  selectedSalesTenantId = String(row?.tenantId || "").trim();
+  allSalesRows = [];
+  void loadSalesForSelectedUser();
+}
+
+function handleSalesSearchInput() {
+  if (salesSearchDebounce) {
+    clearTimeout(salesSearchDebounce);
+  }
+  salesSearchDebounce = setTimeout(() => {
+    void loadSalesForSelectedUser();
+  }, 300);
+}
+
+async function loadSalesForSelectedUser() {
+  if (!auth.currentUser) return;
+  if (!selectedSalesTenantId) {
+    allSalesRows = [];
+    setSalesPlaceholder("Selecciona un usuario activo para ver ventas.");
+    setSalesFeedback("");
+    return;
+  }
+
+  const requestId = ++latestSalesRequestId;
+  const query = String(salesSearchInput?.value || "").trim();
+  setSalesFeedback("Buscando ventas...");
+  if (salesTableBody) {
+    salesTableBody.innerHTML = '<tr><td colspan="6">Cargando ventas...</td></tr>';
+  }
+
+  try {
+    const token = await auth.currentUser.getIdToken(true);
+    const params = new URLSearchParams({
+      tenantId: selectedSalesTenantId
+    });
+    if (query) {
+      params.set("q", query);
+    }
+
+    const response = await fetchWithLoading(`${getAdminSalesEndpoint()}?${params.toString()}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      throw new Error(result?.error || "No se pudieron cargar las ventas.");
+    }
+    if (requestId !== latestSalesRequestId) return;
+
+    allSalesRows = normalizeSalesRows(result?.sales || result?.rows || []);
+    renderSalesTable(allSalesRows);
+    setSalesFeedback(
+      allSalesRows.length ? `${allSalesRows.length} venta(s) encontrada(s).` : "Sin coincidencias para la busqueda."
+    );
+  } catch (error) {
+    console.error(error);
+    if (requestId !== latestSalesRequestId) return;
+    allSalesRows = [];
+    setSalesPlaceholder(error.message || "No se pudieron cargar las ventas.");
+    setSalesFeedback(error.message || "No se pudieron cargar las ventas.");
+  }
+}
+
+function normalizeSalesRows(source) {
+  if (!Array.isArray(source)) return [];
+  return source
+    .map((row) => {
+      const id = String(row?.id || row?.saleId || row?.ventaId || "").trim();
+      const fecha = row?.fecha || row?.createdAt || row?.timestamp || "";
+      const cliente = String(row?.cliente || row?.customerName || row?.customer || "").trim();
+      const vendedor = String(row?.vendedor || row?.employeeName || row?.employee || "").trim();
+      const metodoPago = String(row?.metodoPago || row?.paymentMethod || "").trim();
+      const total = Number(row?.total ?? row?.importeTotal ?? row?.amount ?? 0);
+      return {
+        id: id || "-",
+        fecha: formatDate(fecha),
+        cliente: cliente || "-",
+        vendedor: vendedor || "-",
+        metodoPago: metodoPago || "-",
+        total: Number.isFinite(total) ? total : 0
+      };
+    })
+    .sort((a, b) => String(b.fecha || "").localeCompare(String(a.fecha || "")));
+}
+
+function renderSalesTable(rows) {
+  if (!salesTableBody) return;
+  if (!rows.length) {
+    setSalesPlaceholder("No hay ventas para este usuario.");
+    return;
+  }
+
+  salesTableBody.innerHTML = rows
+    .map((row) =>
+      [
+        "<tr>",
+        `<td>${escapeHtml(row.id)}</td>`,
+        `<td>${escapeHtml(row.fecha)}</td>`,
+        `<td>${escapeHtml(row.cliente)}</td>`,
+        `<td>${escapeHtml(row.vendedor)}</td>`,
+        `<td>${escapeHtml(row.metodoPago)}</td>`,
+        `<td>${escapeHtml(formatMoney(row.total))}</td>`,
+        "</tr>"
+      ].join("")
+    )
+    .join("");
+}
+
+function handleCashboxesUserSelectChange() {
+  const uid = String(cashboxesUserSelect?.value || "").trim();
+  const row = allUserRows.find((entry) => String(entry?.uid || "").trim() === uid);
+  selectedCashboxesUserUid = uid;
+  selectedCashboxesTenantId = String(row?.tenantId || "").trim();
+  allCashboxesRows = [];
+  void loadCashboxesForSelectedUser();
+}
+
+function handleCashboxesSearchInput() {
+  if (cashboxesSearchDebounce) {
+    clearTimeout(cashboxesSearchDebounce);
+  }
+  cashboxesSearchDebounce = setTimeout(() => {
+    void loadCashboxesForSelectedUser();
+  }, 300);
+}
+
+async function loadCashboxesForSelectedUser() {
+  if (!auth.currentUser) return;
+  if (!selectedCashboxesTenantId) {
+    allCashboxesRows = [];
+    setCashboxesPlaceholder("Selecciona un usuario activo para ver cajas.");
+    setCashboxesFeedback("");
+    return;
+  }
+
+  const requestId = ++latestCashboxesRequestId;
+  const query = String(cashboxesSearchInput?.value || "").trim();
+  setCashboxesFeedback("Buscando cajas...");
+  if (cashboxesTableBody) {
+    cashboxesTableBody.innerHTML = '<tr><td colspan="6">Cargando cajas...</td></tr>';
+  }
+
+  try {
+    const token = await auth.currentUser.getIdToken(true);
+    const params = new URLSearchParams({
+      tenantId: selectedCashboxesTenantId
+    });
+    if (query) {
+      params.set("q", query);
+    }
+
+    const response = await fetchWithLoading(`${getAdminCashboxesEndpoint()}?${params.toString()}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      throw new Error(result?.error || "No se pudieron cargar las cajas.");
+    }
+    if (requestId !== latestCashboxesRequestId) return;
+
+    allCashboxesRows = normalizeCashboxesRows(result?.cashboxes || result?.rows || []);
+    renderCashboxesTable(allCashboxesRows);
+    setCashboxesFeedback(
+      allCashboxesRows.length ? `${allCashboxesRows.length} caja(s) encontrada(s).` : "Sin coincidencias para la busqueda."
+    );
+  } catch (error) {
+    console.error(error);
+    if (requestId !== latestCashboxesRequestId) return;
+    allCashboxesRows = [];
+    setCashboxesPlaceholder(error.message || "No se pudieron cargar las cajas.");
+    setCashboxesFeedback(error.message || "No se pudieron cargar las cajas.");
+  }
+}
+
+function normalizeCashboxesRows(source) {
+  if (!Array.isArray(source)) return [];
+  return source
+    .map((row) => {
+      const id = String(row?.id || row?.cashboxId || row?.cajaId || "").trim();
+      const apertura = row?.apertura || row?.openedAt || row?.fechaApertura || "";
+      const cierre = row?.cierre || row?.closedAt || row?.fechaCierre || "";
+      const responsable = String(row?.responsable || row?.employeeName || row?.owner || "").trim();
+      const estado = String(row?.estado || row?.status || (cierre ? "cerrada" : "abierta")).trim();
+      const saldoFinal = Number(row?.saldoFinal ?? row?.balance ?? row?.finalBalance ?? 0);
+      return {
+        id: id || "-",
+        apertura: formatDate(apertura),
+        cierre: cierre ? formatDate(cierre) : "-",
+        responsable: responsable || "-",
+        estado: estado || "-",
+        saldoFinal: Number.isFinite(saldoFinal) ? saldoFinal : 0
+      };
+    })
+    .sort((a, b) => String(b.apertura || "").localeCompare(String(a.apertura || "")));
+}
+
+function renderCashboxesTable(rows) {
+  if (!cashboxesTableBody) return;
+  if (!rows.length) {
+    setCashboxesPlaceholder("No hay cajas para este usuario.");
+    return;
+  }
+
+  cashboxesTableBody.innerHTML = rows
+    .map((row) =>
+      [
+        "<tr>",
+        `<td>${escapeHtml(row.id)}</td>`,
+        `<td>${escapeHtml(row.apertura)}</td>`,
+        `<td>${escapeHtml(row.cierre)}</td>`,
+        `<td>${escapeHtml(row.responsable)}</td>`,
+        `<td>${escapeHtml(row.estado)}</td>`,
+        `<td>${escapeHtml(formatMoney(row.saldoFinal))}</td>`,
         "</tr>"
       ].join("")
     )
@@ -644,9 +996,25 @@ function showLoggedOutState() {
   selectedProductsTenantId = "";
   allProductRows = [];
   latestProductsRequestId = 0;
+  selectedSalesUserUid = "";
+  selectedSalesTenantId = "";
+  allSalesRows = [];
+  latestSalesRequestId = 0;
+  selectedCashboxesUserUid = "";
+  selectedCashboxesTenantId = "";
+  allCashboxesRows = [];
+  latestCashboxesRequestId = 0;
   if (productsSearchDebounce) {
     clearTimeout(productsSearchDebounce);
     productsSearchDebounce = null;
+  }
+  if (salesSearchDebounce) {
+    clearTimeout(salesSearchDebounce);
+    salesSearchDebounce = null;
+  }
+  if (cashboxesSearchDebounce) {
+    clearTimeout(cashboxesSearchDebounce);
+    cashboxesSearchDebounce = null;
   }
   pendingGlobalLoads = 0;
   tableBody.innerHTML = '<tr><td colspan="11">Sin datos.</td></tr>';
@@ -656,9 +1024,23 @@ function showLoggedOutState() {
     productsUserSelect.innerHTML = '<option value="">Selecciona un usuario...</option>';
     productsUserSelect.disabled = true;
   }
+  if (salesUserSelect) {
+    salesUserSelect.innerHTML = '<option value="">Selecciona un usuario...</option>';
+    salesUserSelect.disabled = true;
+  }
+  if (cashboxesUserSelect) {
+    cashboxesUserSelect.innerHTML = '<option value="">Selecciona un usuario...</option>';
+    cashboxesUserSelect.disabled = true;
+  }
   if (productsSearchInput) productsSearchInput.value = "";
+  if (salesSearchInput) salesSearchInput.value = "";
+  if (cashboxesSearchInput) cashboxesSearchInput.value = "";
   setProductsPlaceholder("Selecciona un usuario activo para ver productos.");
   setProductsFeedback("");
+  setSalesPlaceholder("Selecciona un usuario activo para ver ventas.");
+  setSalesFeedback("");
+  setCashboxesPlaceholder("Selecciona un usuario activo para ver cajas.");
+  setCashboxesFeedback("");
   planForm?.classList.add("hidden");
   userActionsPanel?.classList.add("hidden");
   globalLoadingNode?.classList.add("hidden");
@@ -676,18 +1058,30 @@ function showLoggedInState() {
 function setActiveSection(sectionId) {
   activeSection = sectionId === "plans" ? "plans" : "users";
   activeSection = sectionId === "products" ? "products" : activeSection;
+  activeSection = sectionId === "sales" ? "sales" : activeSection;
+  activeSection = sectionId === "cashboxes" ? "cashboxes" : activeSection;
 
   usersSection?.classList.toggle("hidden", activeSection !== "users");
   plansSection?.classList.toggle("hidden", activeSection !== "plans");
   productsSection?.classList.toggle("hidden", activeSection !== "products");
+  salesSection?.classList.toggle("hidden", activeSection !== "sales");
+  cashboxesSection?.classList.toggle("hidden", activeSection !== "cashboxes");
 
 
   navUsersBtn?.classList.toggle("is-active", activeSection === "users");
   navPlansBtn?.classList.toggle("is-active", activeSection === "plans");
   navProductsBtn?.classList.toggle("is-active", activeSection === "products");
+  navSalesBtn?.classList.toggle("is-active", activeSection === "sales");
+  navCashboxesBtn?.classList.toggle("is-active", activeSection === "cashboxes");
 
   if (activeSection === "products" && selectedProductsTenantId) {
     void loadProductsForSelectedUser();
+  }
+  if (activeSection === "sales" && selectedSalesTenantId) {
+    void loadSalesForSelectedUser();
+  }
+  if (activeSection === "cashboxes" && selectedCashboxesTenantId) {
+    void loadCashboxesForSelectedUser();
   }
 }
 
@@ -716,6 +1110,26 @@ function setProductsFeedback(message) {
 function setProductsPlaceholder(message) {
   if (!productsTableBody) return;
   productsTableBody.innerHTML = `<tr><td colspan="6">${escapeHtml(String(message || "Sin datos."))}</td></tr>`;
+}
+
+function setSalesFeedback(message) {
+  if (!salesFeedbackNode) return;
+  salesFeedbackNode.textContent = String(message || "");
+}
+
+function setSalesPlaceholder(message) {
+  if (!salesTableBody) return;
+  salesTableBody.innerHTML = `<tr><td colspan="6">${escapeHtml(String(message || "Sin datos."))}</td></tr>`;
+}
+
+function setCashboxesFeedback(message) {
+  if (!cashboxesFeedbackNode) return;
+  cashboxesFeedbackNode.textContent = String(message || "");
+}
+
+function setCashboxesPlaceholder(message) {
+  if (!cashboxesTableBody) return;
+  cashboxesTableBody.innerHTML = `<tr><td colspan="6">${escapeHtml(String(message || "Sin datos."))}</td></tr>`;
 }
 
 function toggleActionButtons(loading) {

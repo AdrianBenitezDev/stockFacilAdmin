@@ -40,7 +40,9 @@
       <div class="section-nav">
         <button id="admin-nav-users-btn" type="button" class="mode-btn is-active">Usuarios</button>
         <button id="admin-nav-plans-btn" type="button" class="mode-btn-secondary">Planes</button>
-         <button id="admin-nav-products-btn" type="button" class="mode-btn-secondary">Productos</button>
+        <button id="admin-nav-products-btn" type="button" class="mode-btn-secondary">Productos</button>
+        <button id="admin-nav-sales-btn" type="button" class="mode-btn-secondary">Ventas</button>
+        <button id="admin-nav-cashboxes-btn" type="button" class="mode-btn-secondary">Cajas</button>
       </div>
 
       <section id="admin-users-section">
@@ -207,6 +209,94 @@
             <tbody id="admin-products-table-body">
               <tr>
                 <td colspan="6">Selecciona un usuario activo para ver productos.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="admin-sales-section" class="hidden">
+        <p class="subtitle">Explora ventas por usuario activo.</p>
+        <p id="admin-sales-feedback" class="feedback" aria-live="polite"></p>
+
+        <div class="products-filters">
+          <div class="products-filter-group">
+            <label for="admin-sales-user-select" class="users-filters-label">Usuario activo</label>
+            <select id="admin-sales-user-select">
+              <option value="">Selecciona un usuario...</option>
+            </select>
+          </div>
+
+          <div class="products-filter-group">
+            <label for="admin-sales-search" class="users-filters-label">Buscar venta</label>
+            <input
+              id="admin-sales-search"
+              type="search"
+              placeholder="ID, cliente, vendedor o metodo de pago"
+              autocomplete="off"
+            >
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Fecha</th>
+                <th>Cliente</th>
+                <th>Vendedor</th>
+                <th>Metodo pago</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody id="admin-sales-table-body">
+              <tr>
+                <td colspan="6">Selecciona un usuario activo para ver ventas.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="admin-cashboxes-section" class="hidden">
+        <p class="subtitle">Explora cajas por usuario activo.</p>
+        <p id="admin-cashboxes-feedback" class="feedback" aria-live="polite"></p>
+
+        <div class="products-filters">
+          <div class="products-filter-group">
+            <label for="admin-cashboxes-user-select" class="users-filters-label">Usuario activo</label>
+            <select id="admin-cashboxes-user-select">
+              <option value="">Selecciona un usuario...</option>
+            </select>
+          </div>
+
+          <div class="products-filter-group">
+            <label for="admin-cashboxes-search" class="users-filters-label">Buscar caja</label>
+            <input
+              id="admin-cashboxes-search"
+              type="search"
+              placeholder="ID, responsable o estado"
+              autocomplete="off"
+            >
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Apertura</th>
+                <th>Cierre</th>
+                <th>Responsable</th>
+                <th>Estado</th>
+                <th>Saldo final</th>
+              </tr>
+            </thead>
+            <tbody id="admin-cashboxes-table-body">
+              <tr>
+                <td colspan="6">Selecciona un usuario activo para ver cajas.</td>
               </tr>
             </tbody>
           </table>

@@ -202,6 +202,10 @@ button:hover {
 #admin-users-search,
 #admin-products-user-select,
 #admin-products-search,
+#admin-sales-user-select,
+#admin-sales-search,
+#admin-cashboxes-user-select,
+#admin-cashboxes-search,
 .plan-editor input,
 .plan-editor textarea {
   border: 1px solid #cbd5e1;
@@ -214,6 +218,10 @@ button:hover {
 #admin-users-search:focus,
 #admin-products-user-select:focus,
 #admin-products-search:focus,
+#admin-sales-user-select:focus,
+#admin-sales-search:focus,
+#admin-cashboxes-user-select:focus,
+#admin-cashboxes-search:focus,
 .plan-editor input:focus,
 .plan-editor textarea:focus {
   outline: 2px solid #99f6e4;
