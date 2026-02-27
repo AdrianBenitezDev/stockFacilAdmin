@@ -240,6 +240,11 @@ button:hover {
   gap: 0.4rem;
 }
 
+.backup-btn {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

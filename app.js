@@ -70,14 +70,17 @@ const productsFeedbackNode = document.getElementById("admin-products-feedback");
 const productsUserSelect = document.getElementById("admin-products-user-select");
 const productsSearchInput = document.getElementById("admin-products-search");
 const productsTableBody = document.getElementById("admin-products-table-body");
+const productsBackupBtn = document.getElementById("admin-products-backup-btn");
 const salesFeedbackNode = document.getElementById("admin-sales-feedback");
 const salesUserSelect = document.getElementById("admin-sales-user-select");
 const salesSearchInput = document.getElementById("admin-sales-search");
 const salesTableBody = document.getElementById("admin-sales-table-body");
+const salesBackupBtn = document.getElementById("admin-sales-backup-btn");
 const cashboxesFeedbackNode = document.getElementById("admin-cashboxes-feedback");
 const cashboxesUserSelect = document.getElementById("admin-cashboxes-user-select");
 const cashboxesSearchInput = document.getElementById("admin-cashboxes-search");
 const cashboxesTableBody = document.getElementById("admin-cashboxes-table-body");
+const cashboxesBackupBtn = document.getElementById("admin-cashboxes-backup-btn");
 
 let allUserRows = [];
 let allPlans = [];
@@ -122,10 +125,13 @@ async function init() {
   usersSearchInput?.addEventListener("input", applyUsersFilter);
   productsUserSelect?.addEventListener("change", handleProductsUserSelectChange);
   productsSearchInput?.addEventListener("input", handleProductsSearchInput);
+  productsBackupBtn?.addEventListener("click", handleProductsBackupClick);
   salesUserSelect?.addEventListener("change", handleSalesUserSelectChange);
   salesSearchInput?.addEventListener("input", handleSalesSearchInput);
+  salesBackupBtn?.addEventListener("click", handleSalesBackupClick);
   cashboxesUserSelect?.addEventListener("change", handleCashboxesUserSelectChange);
   cashboxesSearchInput?.addEventListener("input", handleCashboxesSearchInput);
+  cashboxesBackupBtn?.addEventListener("click", handleCashboxesBackupClick);
   tableBody?.addEventListener("click", handleUserRowClick);
   planCardsNode?.addEventListener("click", handlePlanCardClick);
   planForm?.addEventListener("submit", handlePlanSave);
@@ -393,9 +399,11 @@ function renderProductsUserOptions() {
     allProductRows = [];
     setProductsPlaceholder("No hay usuarios activos para consultar productos.");
     setProductsFeedback("");
+    syncBackupButtonsState();
     return;
   }
 
+  syncBackupButtonsState();
   if (activeSection === "products") {
     void loadProductsForSelectedUser();
   }
@@ -428,9 +436,11 @@ function renderSalesUserOptions() {
     allSalesRows = [];
     setSalesPlaceholder("No hay usuarios activos para consultar ventas.");
     setSalesFeedback("");
+    syncBackupButtonsState();
     return;
   }
 
+  syncBackupButtonsState();
   if (activeSection === "sales") {
     void loadSalesForSelectedUser();
   }
@@ -463,9 +473,11 @@ function renderCashboxesUserOptions() {
     allCashboxesRows = [];
     setCashboxesPlaceholder("No hay usuarios activos para consultar cajas.");
     setCashboxesFeedback("");
+    syncBackupButtonsState();
     return;
   }
 
+  syncBackupButtonsState();
   if (activeSection === "cashboxes") {
     void loadCashboxesForSelectedUser();
   }
@@ -477,6 +489,7 @@ function handleProductsUserSelectChange() {
   selectedProductsUserUid = uid;
   selectedProductsTenantId = String(row?.tenantId || "").trim();
   allProductRows = [];
+  syncBackupButtonsState();
   void loadProductsForSelectedUser();
 }
 
@@ -598,6 +611,7 @@ function handleSalesUserSelectChange() {
   selectedSalesUserUid = uid;
   selectedSalesTenantId = String(row?.tenantId || "").trim();
   allSalesRows = [];
+  syncBackupButtonsState();
   void loadSalesForSelectedUser();
 }
 
@@ -713,7 +727,47 @@ function handleCashboxesUserSelectChange() {
   selectedCashboxesUserUid = uid;
   selectedCashboxesTenantId = String(row?.tenantId || "").trim();
   allCashboxesRows = [];
+  syncBackupButtonsState();
   void loadCashboxesForSelectedUser();
+}
+
+async function handleProductsBackupClick() {
+  await runSectionBackupDownload({
+    tenantId: selectedProductsTenantId,
+    endpoint: getAdminProductsEndpoint(),
+    responseKey: "products",
+    normalizeRows: normalizeProductRows,
+    suffix: "productos",
+    emptyMessage: "No hay productos para respaldar.",
+    successLabel: "productos",
+    setFeedback: setProductsFeedback
+  });
+}
+
+async function handleSalesBackupClick() {
+  await runSectionBackupDownload({
+    tenantId: selectedSalesTenantId,
+    endpoint: getAdminSalesEndpoint(),
+    responseKey: "sales",
+    normalizeRows: normalizeSalesRows,
+    suffix: "Ventas",
+    emptyMessage: "No hay ventas para respaldar.",
+    successLabel: "ventas",
+    setFeedback: setSalesFeedback
+  });
+}
+
+async function handleCashboxesBackupClick() {
+  await runSectionBackupDownload({
+    tenantId: selectedCashboxesTenantId,
+    endpoint: getAdminCashboxesEndpoint(),
+    responseKey: "cashboxes",
+    normalizeRows: normalizeCashboxesRows,
+    suffix: "caja",
+    emptyMessage: "No hay cajas para respaldar.",
+    successLabel: "cajas",
+    setFeedback: setCashboxesFeedback
+  });
 }
 
 function handleCashboxesSearchInput() {
@@ -1035,6 +1089,7 @@ function showLoggedOutState() {
   if (productsSearchInput) productsSearchInput.value = "";
   if (salesSearchInput) salesSearchInput.value = "";
   if (cashboxesSearchInput) cashboxesSearchInput.value = "";
+  syncBackupButtonsState();
   setProductsPlaceholder("Selecciona un usuario activo para ver productos.");
   setProductsFeedback("");
   setSalesPlaceholder("Selecciona un usuario activo para ver ventas.");
@@ -1130,6 +1185,117 @@ function setCashboxesFeedback(message) {
 function setCashboxesPlaceholder(message) {
   if (!cashboxesTableBody) return;
   cashboxesTableBody.innerHTML = `<tr><td colspan="6">${escapeHtml(String(message || "Sin datos."))}</td></tr>`;
+}
+
+function syncBackupButtonsState() {
+  if (productsBackupBtn) productsBackupBtn.disabled = !selectedProductsTenantId;
+  if (salesBackupBtn) salesBackupBtn.disabled = !selectedSalesTenantId;
+  if (cashboxesBackupBtn) cashboxesBackupBtn.disabled = !selectedCashboxesTenantId;
+}
+
+function createSectionBackup({
+  rows,
+  tenantId,
+  suffix,
+  emptyMessage,
+  successLabel,
+  setFeedback
+}) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    setFeedback(emptyMessage);
+    return;
+  }
+
+  const timestamp = getBackupTimestamp();
+  const tenantSegment = sanitizeFileSegment(tenantId);
+  const fileName = tenantSegment
+    ? `${timestamp}_${tenantSegment}_${suffix}.json`
+    : `${timestamp}_${suffix}.json`;
+  const payload = {
+    generatedAt: new Date().toISOString(),
+    tenantId: String(tenantId || ""),
+    total: rows.length,
+    data: rows
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: "application/json;charset=utf-8"
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  setFeedback(`Backup de ${successLabel} generado: ${fileName}`);
+}
+
+async function runSectionBackupDownload({
+  tenantId,
+  endpoint,
+  responseKey,
+  normalizeRows,
+  suffix,
+  emptyMessage,
+  successLabel,
+  setFeedback
+}) {
+  if (!auth.currentUser) return;
+  if (!tenantId) {
+    setFeedback("Selecciona un usuario activo antes de generar el backup.");
+    return;
+  }
+
+  setFeedback("Generando backup...");
+  try {
+    const token = await auth.currentUser.getIdToken(true);
+    const params = new URLSearchParams({
+      tenantId: String(tenantId || "").trim()
+    });
+    const response = await fetchWithLoading(`${endpoint}?${params.toString()}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      throw new Error(result?.error || "No se pudo generar el backup.");
+    }
+
+    const sourceRows = result?.[responseKey] || result?.rows || [];
+    const rows = normalizeRows(sourceRows);
+    createSectionBackup({
+      rows,
+      tenantId,
+      suffix,
+      emptyMessage,
+      successLabel,
+      setFeedback
+    });
+  } catch (error) {
+    console.error(error);
+    setFeedback(error.message || "No se pudo generar el backup.");
+  }
+}
+
+function getBackupTimestamp() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  const hours = String(now.getHours()).padStart(2, "0");
+  const minutes = String(now.getMinutes()).padStart(2, "0");
+  const seconds = String(now.getSeconds()).padStart(2, "0");
+  return `${year}${month}${day}_${hours}${minutes}${seconds}`;
+}
+
+function sanitizeFileSegment(value) {
+  return String(value || "")
+    .trim()
+    .replace(/[^\w-]/g, "")
+    .slice(0, 40);
 }
 
 function toggleActionButtons(loading) {
