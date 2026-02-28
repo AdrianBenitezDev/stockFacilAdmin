@@ -918,7 +918,13 @@ function normalizeCashboxesRows(source) {
       const responsable = String(row?.responsable || row?.employeeName || row?.owner || "").trim();
       const estado = String(row?.estado || row?.status || (cierreRaw ? "cerrada" : "abierta")).trim();
       const saldoFinal = Number(row?.saldoFinal ?? row?.balance ?? row?.finalBalance ?? 0);
-      const salesCount = resolveCashboxSalesCount(row);
+      const salesCount = toPositiveInteger(
+        row?.salesCount ??
+          row?.cierre?.salesCount ??
+          row?.cierreCaja?.salesCount ??
+          row?.resumen?.salesCount ??
+          resolveCashboxSalesCount(row)
+      );
       const aperturaTs = getTimestampFromUnknownDate(aperturaRaw);
       const rowKey = `${id || "sin-id"}::${String(aperturaRaw || "")}::${String(cierreRaw || "")}`;
       return {
@@ -987,9 +993,15 @@ function renderSelectedCashboxDetail() {
 }
 
 function resolveCashboxSalesCount(row) {
+  const explicitSalesCount = toPositiveInteger(
+    row?.salesCount ?? row?.cierre?.salesCount ?? row?.cierreCaja?.salesCount ?? row?.resumen?.salesCount
+  );
+  if (explicitSalesCount > 0) {
+    return explicitSalesCount;
+  }
+
   const directCandidates = [
     row?.cantidadVentas,
-    row?.salesCount,
     row?.totalSales,
     row?.ventasCount,
     row?.cantidad_ventas
