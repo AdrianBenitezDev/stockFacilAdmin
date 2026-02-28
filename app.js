@@ -81,6 +81,8 @@ const cashboxesUserSelect = document.getElementById("admin-cashboxes-user-select
 const cashboxesSearchInput = document.getElementById("admin-cashboxes-search");
 const cashboxesTableBody = document.getElementById("admin-cashboxes-table-body");
 const cashboxesBackupBtn = document.getElementById("admin-cashboxes-backup-btn");
+const cashboxDetailFeedbackNode = document.getElementById("admin-cashbox-detail-feedback");
+const cashboxDetailContentNode = document.getElementById("admin-cashbox-detail-content");
 
 let allUserRows = [];
 let allPlans = [];
@@ -102,9 +104,17 @@ let latestSalesRequestId = 0;
 let selectedCashboxesUserUid = "";
 let selectedCashboxesTenantId = "";
 let allCashboxesRows = [];
+let allCashboxesSourceRows = [];
 let cashboxesSearchDebounce = null;
 let latestCashboxesRequestId = 0;
+let selectedCashboxRowKey = "";
+let selectedCashboxRow = null;
 let pendingGlobalLoads = 0;
+
+const ADMIN_CACHE_DB_NAME = "stockfacil-admin-cache";
+const ADMIN_CACHE_DB_VERSION = 1;
+const CASHBOXES_CACHE_STORE = "cashboxes_by_tenant";
+let adminCacheDbPromise = null;
 
 init().catch((error) => {
   console.error(error);
@@ -132,6 +142,7 @@ async function init() {
   cashboxesUserSelect?.addEventListener("change", handleCashboxesUserSelectChange);
   cashboxesSearchInput?.addEventListener("input", handleCashboxesSearchInput);
   cashboxesBackupBtn?.addEventListener("click", handleCashboxesBackupClick);
+  cashboxesTableBody?.addEventListener("click", handleCashboxRowClick);
   tableBody?.addEventListener("click", handleUserRowClick);
   planCardsNode?.addEventListener("click", handlePlanCardClick);
   planForm?.addEventListener("submit", handlePlanSave);
@@ -186,7 +197,7 @@ async function handleRefresh() {
     return;
   }
   if (activeSection === "cashboxes") {
-    await loadCashboxesForSelectedUser();
+    await loadCashboxesForSelectedUser({ forceRemote: true });
     return;
   }
   await loadOverview();
@@ -471,6 +482,10 @@ function renderCashboxesUserOptions() {
 
   if (!activeUsers.length) {
     allCashboxesRows = [];
+    allCashboxesSourceRows = [];
+    selectedCashboxRowKey = "";
+    selectedCashboxRow = null;
+    renderSelectedCashboxDetail();
     setCashboxesPlaceholder("No hay usuarios activos para consultar cajas.");
     setCashboxesFeedback("");
     syncBackupButtonsState();
@@ -727,6 +742,10 @@ function handleCashboxesUserSelectChange() {
   selectedCashboxesUserUid = uid;
   selectedCashboxesTenantId = String(row?.tenantId || "").trim();
   allCashboxesRows = [];
+  allCashboxesSourceRows = [];
+  selectedCashboxRowKey = "";
+  selectedCashboxRow = null;
+  renderSelectedCashboxDetail();
   syncBackupButtonsState();
   void loadCashboxesForSelectedUser();
 }
@@ -779,56 +798,114 @@ function handleCashboxesSearchInput() {
   }, 300);
 }
 
-async function loadCashboxesForSelectedUser() {
+async function loadCashboxesForSelectedUser(options = {}) {
   if (!auth.currentUser) return;
   if (!selectedCashboxesTenantId) {
     allCashboxesRows = [];
+    allCashboxesSourceRows = [];
+    selectedCashboxRowKey = "";
+    selectedCashboxRow = null;
+    renderSelectedCashboxDetail();
     setCashboxesPlaceholder("Selecciona un usuario activo para ver cajas.");
     setCashboxesFeedback("");
     return;
   }
 
+  const forceRemote = options?.forceRemote === true;
   const requestId = ++latestCashboxesRequestId;
   const query = String(cashboxesSearchInput?.value || "").trim();
-  setCashboxesFeedback("Buscando cajas...");
+  setCashboxesFeedback(forceRemote ? "Actualizando cajas desde Firebase..." : "Buscando cajas...");
   if (cashboxesTableBody) {
-    cashboxesTableBody.innerHTML = '<tr><td colspan="6">Cargando cajas...</td></tr>';
+    cashboxesTableBody.innerHTML = '<tr><td colspan="7">Cargando cajas...</td></tr>';
   }
 
   try {
-    const token = await auth.currentUser.getIdToken(true);
-    const params = new URLSearchParams({
-      tenantId: selectedCashboxesTenantId
-    });
-    if (query) {
-      params.set("q", query);
-    }
+    let sourceRows = [];
+    if (forceRemote) {
+      const token = await auth.currentUser.getIdToken(true);
+      const params = new URLSearchParams({
+        tenantId: selectedCashboxesTenantId
+      });
+      const response = await fetchWithLoading(`${getAdminCashboxesEndpoint()}?${params.toString()}`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
 
-    const response = await fetchWithLoading(`${getAdminCashboxesEndpoint()}?${params.toString()}`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.ok) {
+        throw new Error(result?.error || "No se pudieron cargar las cajas.");
       }
-    });
-
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok || !result.ok) {
-      throw new Error(result?.error || "No se pudieron cargar las cajas.");
+      sourceRows = Array.isArray(result?.cashboxes || result?.rows)
+        ? result.cashboxes || result.rows
+        : [];
+      await saveCachedCashboxesRows(selectedCashboxesTenantId, sourceRows);
+    } else {
+      sourceRows = await getCachedCashboxesRows(selectedCashboxesTenantId);
     }
     if (requestId !== latestCashboxesRequestId) return;
 
-    allCashboxesRows = normalizeCashboxesRows(result?.cashboxes || result?.rows || []);
+    allCashboxesSourceRows = normalizeCashboxesRows(sourceRows);
+    allCashboxesRows = applyCashboxesQuery(allCashboxesSourceRows, query);
     renderCashboxesTable(allCashboxesRows);
+
+    if (!allCashboxesSourceRows.length) {
+      setCashboxesPlaceholder(
+        forceRemote
+          ? "No hay cajas para este usuario."
+          : "No hay cajas en cache local. Presiona Actualizar para consultar Firebase."
+      );
+      setCashboxesFeedback(forceRemote ? "No hay cajas para este usuario." : "Cache vacia para este usuario.");
+      selectedCashboxRowKey = "";
+      selectedCashboxRow = null;
+      renderSelectedCashboxDetail();
+      return;
+    }
+
+    if (!allCashboxesRows.length) {
+      setCashboxesFeedback("Sin coincidencias para la busqueda.");
+      selectedCashboxRowKey = "";
+      selectedCashboxRow = null;
+      renderSelectedCashboxDetail();
+      return;
+    }
+
+    if (selectedCashboxRowKey) {
+      selectedCashboxRow =
+        allCashboxesSourceRows.find((row) => row.rowKey === selectedCashboxRowKey) || null;
+      if (!selectedCashboxRow) {
+        selectedCashboxRowKey = "";
+      }
+    }
+    renderSelectedCashboxDetail();
     setCashboxesFeedback(
-      allCashboxesRows.length ? `${allCashboxesRows.length} caja(s) encontrada(s).` : "Sin coincidencias para la busqueda."
+      forceRemote
+        ? `${allCashboxesRows.length} caja(s) actualizada(s) desde Firebase.`
+        : `${allCashboxesRows.length} caja(s) desde cache local.`
     );
   } catch (error) {
     console.error(error);
     if (requestId !== latestCashboxesRequestId) return;
     allCashboxesRows = [];
+    allCashboxesSourceRows = [];
+    selectedCashboxRowKey = "";
+    selectedCashboxRow = null;
+    renderSelectedCashboxDetail();
     setCashboxesPlaceholder(error.message || "No se pudieron cargar las cajas.");
     setCashboxesFeedback(error.message || "No se pudieron cargar las cajas.");
   }
+}
+
+function applyCashboxesQuery(rows, query) {
+  const normalizedQuery = normalizeText(query);
+  if (!normalizedQuery) return Array.isArray(rows) ? rows : [];
+  return (Array.isArray(rows) ? rows : []).filter((row) => {
+    const blob = [row?.id, row?.responsable, row?.estado]
+      .map((entry) => normalizeText(entry))
+      .join(" ");
+    return blob.includes(normalizedQuery);
+  });
 }
 
 function normalizeCashboxesRows(source) {
@@ -836,21 +913,28 @@ function normalizeCashboxesRows(source) {
   return source
     .map((row) => {
       const id = String(row?.id || row?.cashboxId || row?.cajaId || "").trim();
-      const apertura = row?.apertura || row?.openedAt || row?.fechaApertura || "";
-      const cierre = row?.cierre || row?.closedAt || row?.fechaCierre || "";
+      const aperturaRaw = row?.apertura || row?.openedAt || row?.fechaApertura || "";
+      const cierreRaw = row?.cierre || row?.closedAt || row?.fechaCierre || "";
       const responsable = String(row?.responsable || row?.employeeName || row?.owner || "").trim();
-      const estado = String(row?.estado || row?.status || (cierre ? "cerrada" : "abierta")).trim();
+      const estado = String(row?.estado || row?.status || (cierreRaw ? "cerrada" : "abierta")).trim();
       const saldoFinal = Number(row?.saldoFinal ?? row?.balance ?? row?.finalBalance ?? 0);
+      const salesCount = resolveCashboxSalesCount(row);
+      const aperturaTs = getTimestampFromUnknownDate(aperturaRaw);
+      const rowKey = `${id || "sin-id"}::${String(aperturaRaw || "")}::${String(cierreRaw || "")}`;
       return {
+        rowKey,
         id: id || "-",
-        apertura: formatDate(apertura),
-        cierre: cierre ? formatDate(cierre) : "-",
+        apertura: formatDate(aperturaRaw),
+        cierre: cierreRaw ? formatDate(cierreRaw) : "-",
         responsable: responsable || "-",
         estado: estado || "-",
-        saldoFinal: Number.isFinite(saldoFinal) ? saldoFinal : 0
+        salesCount,
+        saldoFinal: Number.isFinite(saldoFinal) ? saldoFinal : 0,
+        aperturaTs,
+        raw: row
       };
     })
-    .sort((a, b) => String(b.apertura || "").localeCompare(String(a.apertura || "")));
+    .sort((a, b) => b.aperturaTs - a.aperturaTs);
 }
 
 function renderCashboxesTable(rows) {
@@ -863,17 +947,106 @@ function renderCashboxesTable(rows) {
   cashboxesTableBody.innerHTML = rows
     .map((row) =>
       [
-        "<tr>",
+        `<tr data-cashbox-key="${escapeHtml(row.rowKey)}"${selectedCashboxRowKey === row.rowKey ? ' class="is-selected"' : ""}>`,
         `<td>${escapeHtml(row.id)}</td>`,
         `<td>${escapeHtml(row.apertura)}</td>`,
         `<td>${escapeHtml(row.cierre)}</td>`,
         `<td>${escapeHtml(row.responsable)}</td>`,
         `<td>${escapeHtml(row.estado)}</td>`,
+        `<td>${row.salesCount}</td>`,
         `<td>${escapeHtml(formatMoney(row.saldoFinal))}</td>`,
         "</tr>"
       ].join("")
     )
     .join("");
+}
+
+function handleCashboxRowClick(event) {
+  const rowNode = event.target.closest("tr[data-cashbox-key]");
+  if (!rowNode) return;
+  const rowKey = String(rowNode.getAttribute("data-cashbox-key") || "").trim();
+  if (!rowKey) return;
+  const row = allCashboxesRows.find((entry) => String(entry?.rowKey || "") === rowKey);
+  if (!row) return;
+
+  selectedCashboxRowKey = row.rowKey;
+  selectedCashboxRow = row;
+  renderCashboxesTable(allCashboxesRows);
+  renderSelectedCashboxDetail();
+}
+
+function renderSelectedCashboxDetail() {
+  if (!cashboxDetailFeedbackNode || !cashboxDetailContentNode) return;
+  if (!selectedCashboxRow?.raw) {
+    cashboxDetailFeedbackNode.textContent = "Haz click en una fila para ver el detalle completo.";
+    cashboxDetailContentNode.textContent = "{}";
+    return;
+  }
+  cashboxDetailFeedbackNode.textContent = `Caja ${selectedCashboxRow.id} | ${selectedCashboxRow.estado}`;
+  cashboxDetailContentNode.textContent = JSON.stringify(selectedCashboxRow.raw, null, 2);
+}
+
+function resolveCashboxSalesCount(row) {
+  const directCandidates = [
+    row?.cantidadVentas,
+    row?.salesCount,
+    row?.totalSales,
+    row?.ventasCount,
+    row?.cantidad_ventas
+  ];
+  for (const candidate of directCandidates) {
+    const numeric = Number(candidate);
+    if (Number.isFinite(numeric) && numeric >= 0) {
+      return Math.trunc(numeric);
+    }
+  }
+
+  const arrayCandidates = [row?.ventas, row?.sales, row?.detalleVentas, row?.transacciones];
+  for (const candidate of arrayCandidates) {
+    if (Array.isArray(candidate)) {
+      return candidate.length;
+    }
+  }
+
+  const summary = row?.cierre && typeof row.cierre === "object" ? row.cierre : null;
+  if (summary) {
+    const nestedNumeric = Number(
+      summary?.cantidadVentas ??
+        summary?.salesCount ??
+        summary?.totalSales ??
+        summary?.ventasCount ??
+        summary?.cantidad_ventas
+    );
+    if (Number.isFinite(nestedNumeric) && nestedNumeric >= 0) {
+      return Math.trunc(nestedNumeric);
+    }
+    if (Array.isArray(summary?.ventas)) {
+      return summary.ventas.length;
+    }
+    if (Array.isArray(summary?.sales)) {
+      return summary.sales.length;
+    }
+  }
+
+  return 0;
+}
+
+function getTimestampFromUnknownDate(value) {
+  if (!value) return 0;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "object") {
+    if (typeof value.toDate === "function") {
+      const date = value.toDate();
+      const time = date instanceof Date ? date.getTime() : NaN;
+      return Number.isFinite(time) ? time : 0;
+    }
+    if (Number.isFinite(Number(value.seconds))) {
+      return Number(value.seconds) * 1000;
+    }
+  }
+  const date = new Date(value);
+  const time = date.getTime();
+  return Number.isFinite(time) ? time : 0;
 }
 
 async function loadPlans() {
@@ -1057,7 +1230,10 @@ function showLoggedOutState() {
   selectedCashboxesUserUid = "";
   selectedCashboxesTenantId = "";
   allCashboxesRows = [];
+  allCashboxesSourceRows = [];
   latestCashboxesRequestId = 0;
+  selectedCashboxRowKey = "";
+  selectedCashboxRow = null;
   if (productsSearchDebounce) {
     clearTimeout(productsSearchDebounce);
     productsSearchDebounce = null;
@@ -1096,6 +1272,7 @@ function showLoggedOutState() {
   setSalesFeedback("");
   setCashboxesPlaceholder("Selecciona un usuario activo para ver cajas.");
   setCashboxesFeedback("");
+  renderSelectedCashboxDetail();
   planForm?.classList.add("hidden");
   userActionsPanel?.classList.add("hidden");
   globalLoadingNode?.classList.add("hidden");
@@ -1137,6 +1314,69 @@ function setActiveSection(sectionId) {
   }
   if (activeSection === "cashboxes" && selectedCashboxesTenantId) {
     void loadCashboxesForSelectedUser();
+  }
+}
+
+function openAdminCacheDb() {
+  if (!("indexedDB" in window)) return Promise.resolve(null);
+  if (adminCacheDbPromise) return adminCacheDbPromise;
+
+  adminCacheDbPromise = new Promise((resolve) => {
+    const request = window.indexedDB.open(ADMIN_CACHE_DB_NAME, ADMIN_CACHE_DB_VERSION);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(CASHBOXES_CACHE_STORE)) {
+        db.createObjectStore(CASHBOXES_CACHE_STORE, { keyPath: "tenantId" });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => {
+      console.error("No se pudo abrir IndexedDB para cache de cajas.");
+      resolve(null);
+    };
+  });
+
+  return adminCacheDbPromise;
+}
+
+async function getCachedCashboxesRows(tenantId) {
+  try {
+    const db = await openAdminCacheDb();
+    if (!db || !tenantId) return [];
+    return await new Promise((resolve) => {
+      const tx = db.transaction(CASHBOXES_CACHE_STORE, "readonly");
+      const store = tx.objectStore(CASHBOXES_CACHE_STORE);
+      const request = store.get(String(tenantId || "").trim());
+      request.onsuccess = () => {
+        const rows = Array.isArray(request.result?.rows) ? request.result.rows : [];
+        resolve(rows);
+      };
+      request.onerror = () => resolve([]);
+    });
+  } catch (error) {
+    console.error(error);
+    return [];
+  }
+}
+
+async function saveCachedCashboxesRows(tenantId, rows) {
+  try {
+    const db = await openAdminCacheDb();
+    if (!db || !tenantId) return;
+    await new Promise((resolve) => {
+      const tx = db.transaction(CASHBOXES_CACHE_STORE, "readwrite");
+      const store = tx.objectStore(CASHBOXES_CACHE_STORE);
+      store.put({
+        tenantId: String(tenantId || "").trim(),
+        rows: Array.isArray(rows) ? rows : [],
+        updatedAt: Date.now()
+      });
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+      tx.onabort = () => resolve(false);
+    });
+  } catch (error) {
+    console.error(error);
   }
 }
 
@@ -1184,7 +1424,7 @@ function setCashboxesFeedback(message) {
 
 function setCashboxesPlaceholder(message) {
   if (!cashboxesTableBody) return;
-  cashboxesTableBody.innerHTML = `<tr><td colspan="6">${escapeHtml(String(message || "Sin datos."))}</td></tr>`;
+  cashboxesTableBody.innerHTML = `<tr><td colspan="7">${escapeHtml(String(message || "Sin datos."))}</td></tr>`;
 }
 
 function syncBackupButtonsState() {

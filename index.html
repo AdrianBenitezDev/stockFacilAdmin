@@ -294,16 +294,23 @@
                 <th>Cierre</th>
                 <th>Responsable</th>
                 <th>Estado</th>
+                <th>Cantidad ventas</th>
                 <th>Saldo final</th>
               </tr>
             </thead>
             <tbody id="admin-cashboxes-table-body">
               <tr>
-                <td colspan="6">Selecciona un usuario activo para ver cajas.</td>
+                <td colspan="7">Selecciona un usuario activo para ver cajas.</td>
               </tr>
             </tbody>
           </table>
         </div>
+
+        <section id="admin-cashbox-detail-panel" class="cashbox-detail-panel">
+          <h3>Detalle de cierre</h3>
+          <p id="admin-cashbox-detail-feedback" class="subtitle">Haz click en una fila para ver el detalle completo.</p>
+          <pre id="admin-cashbox-detail-content" class="cashbox-detail-content">{}</pre>
+        </section>
       </section>
 
 

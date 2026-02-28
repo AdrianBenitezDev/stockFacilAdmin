@@ -270,6 +270,43 @@ td {
   background: #ecfeff;
 }
 
+#admin-cashboxes-table-body tr[data-cashbox-key] {
+  cursor: pointer;
+}
+
+#admin-cashboxes-table-body tr[data-cashbox-key]:hover {
+  background: #f8fafc;
+}
+
+#admin-cashboxes-table-body tr.is-selected {
+  background: #ecfeff;
+}
+
+.cashbox-detail-panel {
+  margin-top: 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.8rem;
+  background: #f8fafc;
+}
+
+.cashbox-detail-panel h3 {
+  margin: 0 0 0.45rem;
+}
+
+.cashbox-detail-content {
+  margin: 0;
+  max-height: 340px;
+  overflow: auto;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 0.75rem;
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
 thead th {
   font-size: 0.82rem;
   color: #475569;
