@@ -83,6 +83,8 @@ const cashboxesTableBody = document.getElementById("admin-cashboxes-table-body")
 const cashboxesBackupBtn = document.getElementById("admin-cashboxes-backup-btn");
 const cashboxDetailFeedbackNode = document.getElementById("admin-cashbox-detail-feedback");
 const cashboxDetailContentNode = document.getElementById("admin-cashbox-detail-content");
+const cashboxProductsFeedbackNode = document.getElementById("admin-cashbox-products-feedback");
+const cashboxProductsContentNode = document.getElementById("admin-cashbox-products-content");
 
 let allUserRows = [];
 let allPlans = [];
@@ -918,13 +920,7 @@ function normalizeCashboxesRows(source) {
       const responsable = String(row?.responsable || row?.employeeName || row?.owner || "").trim();
       const estado = String(row?.estado || row?.status || (cierreRaw ? "cerrada" : "abierta")).trim();
       const saldoFinal = Number(row?.saldoFinal ?? row?.balance ?? row?.finalBalance ?? 0);
-      const salesCount = toPositiveInteger(
-        row?.salesCount ??
-          row?.cierre?.salesCount ??
-          row?.cierreCaja?.salesCount ??
-          row?.resumen?.salesCount ??
-          resolveCashboxSalesCount(row)
-      );
+      const salesCount = resolveCashboxSalesCount(row);
       const aperturaTs = getTimestampFromUnknownDate(aperturaRaw);
       const rowKey = `${id || "sin-id"}::${String(aperturaRaw || "")}::${String(cierreRaw || "")}`;
       return {
@@ -986,18 +982,42 @@ function renderSelectedCashboxDetail() {
   if (!selectedCashboxRow?.raw) {
     cashboxDetailFeedbackNode.textContent = "Haz click en una fila para ver el detalle completo.";
     cashboxDetailContentNode.textContent = "{}";
+    if (cashboxProductsFeedbackNode) {
+      cashboxProductsFeedbackNode.textContent = "Sin productos seleccionados.";
+    }
+    if (cashboxProductsContentNode) {
+      cashboxProductsContentNode.textContent = "[]";
+    }
     return;
   }
+  const serializedDoc = serializeForDisplay(selectedCashboxRow.raw);
+  const products = extractCashboxProducts(selectedCashboxRow.raw);
   cashboxDetailFeedbackNode.textContent = `Caja ${selectedCashboxRow.id} | ${selectedCashboxRow.estado}`;
-  cashboxDetailContentNode.textContent = JSON.stringify(selectedCashboxRow.raw, null, 2);
+  cashboxDetailContentNode.textContent = JSON.stringify(serializedDoc, null, 2);
+  if (cashboxProductsFeedbackNode) {
+    cashboxProductsFeedbackNode.textContent = `${products.length} producto(s) detectado(s).`;
+  }
+  if (cashboxProductsContentNode) {
+    cashboxProductsContentNode.textContent = JSON.stringify(serializeForDisplay(products), null, 2);
+  }
 }
 
 function resolveCashboxSalesCount(row) {
-  const explicitSalesCount = toPositiveInteger(
-    row?.salesCount ?? row?.cierre?.salesCount ?? row?.cierreCaja?.salesCount ?? row?.resumen?.salesCount
-  );
-  if (explicitSalesCount > 0) {
-    return explicitSalesCount;
+  const explicitSalesCandidates = [
+    row?.salesCount,
+    row?.cierre?.salesCount,
+    row?.cierreCaja?.salesCount,
+    row?.resumen?.salesCount,
+    row?.close?.salesCount,
+    row?.closing?.salesCount,
+    row?.cierre?.totales?.salesCount,
+    row?.resumen?.totales?.salesCount
+  ];
+  for (const candidate of explicitSalesCandidates) {
+    const parsed = parsePositiveCount(candidate);
+    if (parsed !== null) {
+      return parsed;
+    }
   }
 
   const directCandidates = [
@@ -1007,9 +1027,9 @@ function resolveCashboxSalesCount(row) {
     row?.cantidad_ventas
   ];
   for (const candidate of directCandidates) {
-    const numeric = Number(candidate);
-    if (Number.isFinite(numeric) && numeric >= 0) {
-      return Math.trunc(numeric);
+    const parsed = parsePositiveCount(candidate);
+    if (parsed !== null) {
+      return parsed;
     }
   }
 
@@ -1022,15 +1042,15 @@ function resolveCashboxSalesCount(row) {
 
   const summary = row?.cierre && typeof row.cierre === "object" ? row.cierre : null;
   if (summary) {
-    const nestedNumeric = Number(
+    const nestedNumeric = parsePositiveCount(
       summary?.cantidadVentas ??
         summary?.salesCount ??
         summary?.totalSales ??
         summary?.ventasCount ??
         summary?.cantidad_ventas
     );
-    if (Number.isFinite(nestedNumeric) && nestedNumeric >= 0) {
-      return Math.trunc(nestedNumeric);
+    if (nestedNumeric !== null) {
+      return nestedNumeric;
     }
     if (Array.isArray(summary?.ventas)) {
       return summary.ventas.length;
@@ -1041,6 +1061,108 @@ function resolveCashboxSalesCount(row) {
   }
 
   return 0;
+}
+
+function parsePositiveCount(value) {
+  if (value === null || value === undefined) return null;
+  const numeric = Number(value);
+  if (Number.isFinite(numeric) && numeric >= 0) {
+    return Math.trunc(numeric);
+  }
+  if (typeof value === "string") {
+    const match = value.match(/\d+/);
+    if (match) {
+      return Number(match[0]);
+    }
+  }
+  return null;
+}
+
+function extractCashboxProducts(raw) {
+  if (!raw || typeof raw !== "object") return [];
+
+  const directCandidates = [
+    raw?.productosIncluidos,
+    raw?.productos,
+    raw?.products,
+    raw?.detalleProductos,
+    raw?.cierre?.productosIncluidos,
+    raw?.cierre?.productos,
+    raw?.cierreCaja?.productosIncluidos,
+    raw?.cierreCaja?.productos,
+    raw?.resumen?.productosIncluidos,
+    raw?.resumen?.productos
+  ];
+  for (const candidate of directCandidates) {
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+  }
+
+  const salesCandidates = [
+    raw?.ventas,
+    raw?.sales,
+    raw?.detalleVentas,
+    raw?.transacciones,
+    raw?.cierre?.ventas,
+    raw?.cierre?.sales,
+    raw?.cierreCaja?.ventas,
+    raw?.cierreCaja?.sales
+  ];
+  for (const sales of salesCandidates) {
+    if (!Array.isArray(sales)) continue;
+    const flattened = [];
+    sales.forEach((sale, index) => {
+      const items = sale?.productos || sale?.products || sale?.items || sale?.detalle || [];
+      if (!Array.isArray(items)) return;
+      items.forEach((item) => {
+        flattened.push({
+          saleIndex: index,
+          saleId: sale?.id || sale?.saleId || sale?.ventaId || "",
+          ...item
+        });
+      });
+    });
+    if (flattened.length) {
+      return flattened;
+    }
+  }
+
+  return [];
+}
+
+function serializeForDisplay(value, seen = new WeakSet()) {
+  if (value === null || value === undefined) return value ?? null;
+  if (typeof value === "bigint") return String(value);
+  if (typeof value === "number" || typeof value === "string" || typeof value === "boolean") {
+    return value;
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (typeof value?.toDate === "function") {
+    try {
+      const date = value.toDate();
+      if (date instanceof Date && !Number.isNaN(date.getTime())) {
+        return date.toISOString();
+      }
+    } catch (error) {
+      console.error(error);
+    }
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => serializeForDisplay(entry, seen));
+  }
+  if (typeof value === "object") {
+    if (seen.has(value)) return "[Circular]";
+    seen.add(value);
+    const out = {};
+    Object.keys(value).forEach((key) => {
+      out[key] = serializeForDisplay(value[key], seen);
+    });
+    return out;
+  }
+  return String(value);
 }
 
 function getTimestampFromUnknownDate(value) {

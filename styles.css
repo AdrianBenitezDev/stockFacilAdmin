@@ -294,6 +294,10 @@ td {
   margin: 0 0 0.45rem;
 }
 
+.cashbox-detail-panel h4 {
+  margin: 0.8rem 0 0.45rem;
+}
+
 .cashbox-detail-content {
   margin: 0;
   max-height: 340px;
