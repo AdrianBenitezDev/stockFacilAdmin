@@ -36,11 +36,13 @@ const navProductsBtn = document.getElementById("admin-nav-products-btn");
 const navPlansBtn = document.getElementById("admin-nav-plans-btn");
 const navSalesBtn = document.getElementById("admin-nav-sales-btn");
 const navCashboxesBtn = document.getElementById("admin-nav-cashboxes-btn");
+const navBackupsBtn = document.getElementById("admin-nav-backups-btn");
 const usersSection = document.getElementById("admin-users-section");
 const plansSection = document.getElementById("admin-plans-section");
 const productsSection = document.getElementById("admin-products-section");
 const salesSection = document.getElementById("admin-sales-section");
 const cashboxesSection = document.getElementById("admin-cashboxes-section");
+const backupsSection = document.getElementById("admin-backups-section");
 const usersSearchInput = document.getElementById("admin-users-search");
 const globalLoadingNode = document.getElementById("admin-global-loading");
 const generatedAtNode = document.getElementById("admin-generated-at");
@@ -85,6 +87,13 @@ const cashboxDetailFeedbackNode = document.getElementById("admin-cashbox-detail-
 const cashboxDetailContentNode = document.getElementById("admin-cashbox-detail-content");
 const cashboxProductsFeedbackNode = document.getElementById("admin-cashbox-products-feedback");
 const cashboxProductsContentNode = document.getElementById("admin-cashbox-products-content");
+const backupsFeedbackNode = document.getElementById("admin-backups-feedback");
+const backupsUserSelect = document.getElementById("admin-backups-user-select");
+const backupsSearchInput = document.getElementById("admin-backups-search");
+const backupsTableBody = document.getElementById("admin-backups-table-body");
+const backupSalesFeedbackNode = document.getElementById("admin-backup-sales-feedback");
+const backupSalesTableBody = document.getElementById("admin-backup-sales-table-body");
+const backupDownloadBtn = document.getElementById("admin-backup-download-btn");
 
 let allUserRows = [];
 let allPlans = [];
@@ -111,6 +120,13 @@ let cashboxesSearchDebounce = null;
 let latestCashboxesRequestId = 0;
 let selectedCashboxRowKey = "";
 let selectedCashboxRow = null;
+let selectedBackupsUserUid = "";
+let selectedBackupsTenantId = "";
+let allBackupsRows = [];
+let backupsSearchDebounce = null;
+let latestBackupsRequestId = 0;
+let selectedBackupRowPath = "";
+let selectedBackupRow = null;
 let pendingGlobalLoads = 0;
 
 const ADMIN_CACHE_DB_NAME = "stockfacil-admin-cache";
@@ -134,6 +150,7 @@ async function init() {
   navProductsBtn?.addEventListener("click", () => setActiveSection("products"));
   navSalesBtn?.addEventListener("click", () => setActiveSection("sales"));
   navCashboxesBtn?.addEventListener("click", () => setActiveSection("cashboxes"));
+  navBackupsBtn?.addEventListener("click", () => setActiveSection("backups"));
   usersSearchInput?.addEventListener("input", applyUsersFilter);
   productsUserSelect?.addEventListener("change", handleProductsUserSelectChange);
   productsSearchInput?.addEventListener("input", handleProductsSearchInput);
@@ -145,6 +162,10 @@ async function init() {
   cashboxesSearchInput?.addEventListener("input", handleCashboxesSearchInput);
   cashboxesBackupBtn?.addEventListener("click", handleCashboxesBackupClick);
   cashboxesTableBody?.addEventListener("click", handleCashboxRowClick);
+  backupsUserSelect?.addEventListener("change", handleBackupsUserSelectChange);
+  backupsSearchInput?.addEventListener("input", handleBackupsSearchInput);
+  backupsTableBody?.addEventListener("click", handleBackupRowClick);
+  backupDownloadBtn?.addEventListener("click", handleBackupDownloadClick);
   tableBody?.addEventListener("click", handleUserRowClick);
   planCardsNode?.addEventListener("click", handlePlanCardClick);
   planForm?.addEventListener("submit", handlePlanSave);
@@ -200,6 +221,10 @@ async function handleRefresh() {
   }
   if (activeSection === "cashboxes") {
     await loadCashboxesForSelectedUser({ forceRemote: true });
+    return;
+  }
+  if (activeSection === "backups") {
+    await loadBackupsForSelectedUser();
     return;
   }
   await loadOverview();
@@ -272,6 +297,7 @@ function renderOverview(payload) {
   renderProductsUserOptions();
   renderSalesUserOptions();
   renderCashboxesUserOptions();
+  renderBackupsUserOptions();
   applyUsersFilter();
 }
 
@@ -372,6 +398,21 @@ function getAdminSalesEndpoint() {
 function getAdminCashboxesEndpoint() {
   const projectId = String(firebaseConfig?.projectId || "").trim();
   return `https://us-central1-${projectId}.cloudfunctions.net/adminManageCashboxes`;
+}
+
+function getAdminBackupsEndpoint() {
+  const projectId = String(firebaseConfig?.projectId || "").trim();
+  return `https://us-central1-${projectId}.cloudfunctions.net/adminManageBackups`;
+}
+
+function getAdminReadBackupEndpoint() {
+  const projectId = String(firebaseConfig?.projectId || "").trim();
+  return `https://us-central1-${projectId}.cloudfunctions.net/adminReadBackup`;
+}
+
+function getAdminBackupDownloadUrlEndpoint() {
+  const projectId = String(firebaseConfig?.projectId || "").trim();
+  return `https://us-central1-${projectId}.cloudfunctions.net/adminGetBackupDownloadUrl`;
 }
 
 function getActiveScopedUsers() {
@@ -497,6 +538,47 @@ function renderCashboxesUserOptions() {
   syncBackupButtonsState();
   if (activeSection === "cashboxes") {
     void loadCashboxesForSelectedUser();
+  }
+}
+
+function renderBackupsUserOptions() {
+  if (!backupsUserSelect) return;
+
+  const activeUsers = getActiveScopedUsers();
+  const previousUserUid = selectedBackupsUserUid;
+  const nextUserUid =
+    previousUserUid && activeUsers.some((item) => item.uid === previousUserUid)
+      ? previousUserUid
+      : activeUsers[0]?.uid || "";
+  const selectedUser = activeUsers.find((item) => item.uid === nextUserUid) || null;
+
+  selectedBackupsUserUid = nextUserUid;
+  selectedBackupsTenantId = selectedUser?.tenantId || "";
+  backupsUserSelect.innerHTML =
+    `<option value="">Selecciona un usuario...</option>` +
+    activeUsers
+      .map(
+        (item) =>
+          `<option value="${escapeHtml(item.uid)}"${item.uid === selectedBackupsUserUid ? " selected" : ""}>${escapeHtml(item.label)}</option>`
+      )
+      .join("");
+  backupsUserSelect.disabled = activeUsers.length === 0;
+
+  if (!activeUsers.length) {
+    allBackupsRows = [];
+    selectedBackupRowPath = "";
+    selectedBackupRow = null;
+    setBackupsPlaceholder("No hay usuarios activos para consultar backups.");
+    setBackupsFeedback("");
+    renderBackupSalesTable([]);
+    setBackupSalesFeedback("Selecciona un backup para ver sus ventas.");
+    syncBackupButtonsState();
+    return;
+  }
+
+  syncBackupButtonsState();
+  if (activeSection === "backups") {
+    void loadBackupsForSelectedUser();
   }
 }
 
@@ -803,6 +885,29 @@ function handleCashboxesSearchInput() {
   }, 300);
 }
 
+function handleBackupsUserSelectChange() {
+  const uid = String(backupsUserSelect?.value || "").trim();
+  const row = allUserRows.find((entry) => String(entry?.uid || "").trim() === uid);
+  selectedBackupsUserUid = uid;
+  selectedBackupsTenantId = String(row?.tenantId || "").trim();
+  allBackupsRows = [];
+  selectedBackupRowPath = "";
+  selectedBackupRow = null;
+  renderBackupSalesTable([]);
+  setBackupSalesFeedback("Selecciona un backup para ver sus ventas.");
+  syncBackupButtonsState();
+  void loadBackupsForSelectedUser();
+}
+
+function handleBackupsSearchInput() {
+  if (backupsSearchDebounce) {
+    clearTimeout(backupsSearchDebounce);
+  }
+  backupsSearchDebounce = setTimeout(() => {
+    void loadBackupsForSelectedUser();
+  }, 300);
+}
+
 async function loadCashboxesForSelectedUser(options = {}) {
   if (!auth.currentUser) return;
   if (!selectedCashboxesTenantId) {
@@ -899,6 +1004,284 @@ async function loadCashboxesForSelectedUser(options = {}) {
     renderSelectedCashboxDetail();
     setCashboxesPlaceholder(error.message || "No se pudieron cargar las cajas.");
     setCashboxesFeedback(error.message || "No se pudieron cargar las cajas.");
+  }
+}
+
+async function loadBackupsForSelectedUser() {
+  if (!auth.currentUser) return;
+  if (!selectedBackupsTenantId) {
+    allBackupsRows = [];
+    selectedBackupRowPath = "";
+    selectedBackupRow = null;
+    setBackupsPlaceholder("Selecciona un usuario activo para ver backups.");
+    setBackupsFeedback("");
+    renderBackupSalesTable([]);
+    setBackupSalesFeedback("Selecciona un backup para ver sus ventas.");
+    syncBackupButtonsState();
+    return;
+  }
+
+  const requestId = ++latestBackupsRequestId;
+  const query = String(backupsSearchInput?.value || "").trim();
+  setBackupsFeedback("Buscando backups...");
+  if (backupsTableBody) {
+    backupsTableBody.innerHTML = '<tr><td colspan="5">Cargando backups...</td></tr>';
+  }
+
+  try {
+    const token = await auth.currentUser.getIdToken(true);
+    const params = new URLSearchParams({
+      tenantId: selectedBackupsTenantId
+    });
+    if (query) {
+      params.set("q", query);
+    }
+
+    const response = await fetchWithLoading(`${getAdminBackupsEndpoint()}?${params.toString()}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      throw new Error(result?.error || "No se pudieron cargar los backups.");
+    }
+    if (requestId !== latestBackupsRequestId) return;
+
+    allBackupsRows = normalizeBackupRows(result?.backups || result?.rows || []);
+    renderBackupsTable(allBackupsRows);
+    setBackupsFeedback(
+      allBackupsRows.length
+        ? `${allBackupsRows.length} backup(s) encontrado(s).`
+        : "Sin backups para este usuario."
+    );
+
+    if (selectedBackupRowPath) {
+      selectedBackupRow =
+        allBackupsRows.find((row) => String(row?.path || "") === selectedBackupRowPath) || null;
+      if (!selectedBackupRow) {
+        selectedBackupRowPath = "";
+        renderBackupSalesTable([]);
+        setBackupSalesFeedback("Selecciona un backup para ver sus ventas.");
+      }
+    }
+    syncBackupButtonsState();
+  } catch (error) {
+    console.error(error);
+    if (requestId !== latestBackupsRequestId) return;
+    allBackupsRows = [];
+    selectedBackupRowPath = "";
+    selectedBackupRow = null;
+    setBackupsPlaceholder(error.message || "No se pudieron cargar los backups.");
+    setBackupsFeedback(error.message || "No se pudieron cargar los backups.");
+    renderBackupSalesTable([]);
+    setBackupSalesFeedback("Selecciona un backup para ver sus ventas.");
+    syncBackupButtonsState();
+  }
+}
+
+function normalizeBackupRows(source) {
+  if (!Array.isArray(source)) return [];
+  return source
+    .map((row) => {
+      const path = String(row?.path || row?.id || "").trim();
+      const nombreArchivo = String(row?.nombreArchivo || row?.fileName || path.split("/").pop() || "")
+        .trim();
+      const usuario = String(row?.usuario || "-").trim();
+      const createdAtRaw = row?.createdAt || row?.updatedAt || row?.timestamp || "";
+      const createdAtTs = getTimestampFromUnknownDate(createdAtRaw);
+      const sizeBytes = Number(row?.sizeBytes || row?.size || 0);
+      return {
+        path,
+        nombreArchivo: nombreArchivo || "-",
+        usuario: usuario || "-",
+        createdAt: formatDate(createdAtRaw),
+        createdAtTs,
+        sizeBytes: Number.isFinite(sizeBytes) && sizeBytes > 0 ? sizeBytes : 0
+      };
+    })
+    .filter((row) => Boolean(row.path))
+    .sort((a, b) => Number(b.createdAtTs || 0) - Number(a.createdAtTs || 0));
+}
+
+function renderBackupsTable(rows) {
+  if (!backupsTableBody) return;
+  if (!rows.length) {
+    setBackupsPlaceholder("No hay backups para este usuario.");
+    return;
+  }
+
+  backupsTableBody.innerHTML = rows
+    .map((row) => {
+      const isSelected = selectedBackupRowPath && selectedBackupRowPath === row.path;
+      return [
+        `<tr data-backup-path="${escapeHtml(row.path)}"${isSelected ? ' class="is-selected"' : ""}>`,
+        `<td>${escapeHtml(row.nombreArchivo)}</td>`,
+        `<td>${escapeHtml(row.usuario)}</td>`,
+        `<td>${escapeHtml(row.createdAt)}</td>`,
+        `<td>${escapeHtml(formatBytes(row.sizeBytes))}</td>`,
+        `<td><button type="button" class="mode-btn-secondary" data-backup-download="${escapeHtml(row.path)}">Descargar</button></td>`,
+        "</tr>"
+      ].join("");
+    })
+    .join("");
+}
+
+async function handleBackupRowClick(event) {
+  const downloadBtnNode = event.target.closest("button[data-backup-download]");
+  if (downloadBtnNode) {
+    event.preventDefault();
+    const path = String(downloadBtnNode.getAttribute("data-backup-download") || "").trim();
+    if (!path) return;
+    const row = allBackupsRows.find((entry) => entry.path === path) || null;
+    await downloadBackupByPath(path, row?.nombreArchivo || "");
+    return;
+  }
+
+  const rowNode = event.target.closest("tr[data-backup-path]");
+  if (!rowNode) return;
+  const path = String(rowNode.getAttribute("data-backup-path") || "").trim();
+  if (!path) return;
+  const row = allBackupsRows.find((entry) => entry.path === path);
+  if (!row) return;
+
+  selectedBackupRowPath = row.path;
+  selectedBackupRow = row;
+  renderBackupsTable(allBackupsRows);
+  syncBackupButtonsState();
+  await loadBackupSalesForPath(path);
+}
+
+async function loadBackupSalesForPath(path) {
+  if (!auth.currentUser) return;
+  if (!selectedBackupsTenantId || !path) return;
+
+  setBackupSalesFeedback("Cargando ventas del backup...");
+  renderBackupSalesTable([], "Cargando ventas...");
+  try {
+    const token = await auth.currentUser.getIdToken(true);
+    const params = new URLSearchParams({
+      tenantId: selectedBackupsTenantId,
+      path: path,
+      maxSales: "5000"
+    });
+    const response = await fetchWithLoading(`${getAdminReadBackupEndpoint()}?${params.toString()}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      throw new Error(result?.error || "No se pudieron leer las ventas del backup.");
+    }
+    const sales = normalizeBackupSalesRows(result?.sales || []);
+    renderBackupSalesTable(sales);
+    setBackupSalesFeedback(
+      `${sales.length} venta(s) del backup ${selectedBackupRow?.nombreArchivo || ""}`.trim()
+    );
+  } catch (error) {
+    console.error(error);
+    renderBackupSalesTable([], error.message || "No se pudieron cargar las ventas del backup.");
+    setBackupSalesFeedback(error.message || "No se pudieron cargar las ventas del backup.");
+  }
+}
+
+function normalizeBackupSalesRows(source) {
+  if (!Array.isArray(source)) return [];
+  return source
+    .map((row) => {
+      const id = String(row?.id || row?.idVenta || "").trim();
+      const createdAtRaw = row?.createdAt || row?.fecha || "";
+      const createdAtTs = getTimestampFromUnknownDate(createdAtRaw);
+      const usuario = String(row?.usuario || row?.usuarioNombre || "-").trim();
+      const itemsCount = Number(row?.itemsCount || 0);
+      const tipoPago = String(row?.tipoPago || row?.metodoPago || "-").trim();
+      const total = Number(row?.total || 0);
+      return {
+        id: id || "-",
+        createdAt: formatDate(createdAtRaw),
+        createdAtTs,
+        usuario: usuario || "-",
+        itemsCount: Number.isFinite(itemsCount) ? itemsCount : 0,
+        tipoPago: tipoPago || "-",
+        total: Number.isFinite(total) ? total : 0
+      };
+    })
+    .sort((a, b) => Number(b.createdAtTs || 0) - Number(a.createdAtTs || 0));
+}
+
+function renderBackupSalesTable(rows, emptyMessage = "Sin datos.") {
+  if (!backupSalesTableBody) return;
+  const list = Array.isArray(rows) ? rows : [];
+  if (!list.length) {
+    backupSalesTableBody.innerHTML = `<tr><td colspan="6">${escapeHtml(String(emptyMessage || "Sin datos."))}</td></tr>`;
+    return;
+  }
+  backupSalesTableBody.innerHTML = list
+    .map((row) =>
+      [
+        "<tr>",
+        `<td>${escapeHtml(row.id)}</td>`,
+        `<td>${escapeHtml(row.createdAt)}</td>`,
+        `<td>${escapeHtml(row.usuario)}</td>`,
+        `<td>${row.itemsCount}</td>`,
+        `<td>${escapeHtml(row.tipoPago)}</td>`,
+        `<td>${escapeHtml(formatMoney(row.total))}</td>`,
+        "</tr>"
+      ].join("")
+    )
+    .join("");
+}
+
+async function handleBackupDownloadClick() {
+  if (!selectedBackupRowPath) {
+    setBackupsFeedback("Selecciona un backup para descargar.");
+    return;
+  }
+  await downloadBackupByPath(selectedBackupRowPath, selectedBackupRow?.nombreArchivo || "");
+}
+
+async function downloadBackupByPath(path, fileNameHint = "") {
+  if (!auth.currentUser) return;
+  if (!selectedBackupsTenantId || !path) return;
+
+  setBackupsFeedback("Generando enlace de descarga...");
+  try {
+    const token = await auth.currentUser.getIdToken(true);
+    const params = new URLSearchParams({
+      tenantId: selectedBackupsTenantId,
+      path: path
+    });
+    const response = await fetchWithLoading(
+      `${getAdminBackupDownloadUrlEndpoint()}?${params.toString()}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok || !result?.url) {
+      throw new Error(result?.error || "No se pudo generar el enlace de descarga.");
+    }
+
+    const link = document.createElement("a");
+    link.href = String(result.url || "");
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.download = String(fileNameHint || path.split("/").pop() || "backup_ventas.json");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setBackupsFeedback(`Descarga iniciada: ${link.download}`);
+  } catch (error) {
+    console.error(error);
+    setBackupsFeedback(error.message || "No se pudo descargar el backup.");
   }
 }
 
@@ -1371,6 +1754,12 @@ function showLoggedOutState() {
   latestCashboxesRequestId = 0;
   selectedCashboxRowKey = "";
   selectedCashboxRow = null;
+  selectedBackupsUserUid = "";
+  selectedBackupsTenantId = "";
+  allBackupsRows = [];
+  latestBackupsRequestId = 0;
+  selectedBackupRowPath = "";
+  selectedBackupRow = null;
   if (productsSearchDebounce) {
     clearTimeout(productsSearchDebounce);
     productsSearchDebounce = null;
@@ -1382,6 +1771,10 @@ function showLoggedOutState() {
   if (cashboxesSearchDebounce) {
     clearTimeout(cashboxesSearchDebounce);
     cashboxesSearchDebounce = null;
+  }
+  if (backupsSearchDebounce) {
+    clearTimeout(backupsSearchDebounce);
+    backupsSearchDebounce = null;
   }
   pendingGlobalLoads = 0;
   tableBody.innerHTML = '<tr><td colspan="11">Sin datos.</td></tr>';
@@ -1399,9 +1792,14 @@ function showLoggedOutState() {
     cashboxesUserSelect.innerHTML = '<option value="">Selecciona un usuario...</option>';
     cashboxesUserSelect.disabled = true;
   }
+  if (backupsUserSelect) {
+    backupsUserSelect.innerHTML = '<option value="">Selecciona un usuario...</option>';
+    backupsUserSelect.disabled = true;
+  }
   if (productsSearchInput) productsSearchInput.value = "";
   if (salesSearchInput) salesSearchInput.value = "";
   if (cashboxesSearchInput) cashboxesSearchInput.value = "";
+  if (backupsSearchInput) backupsSearchInput.value = "";
   syncBackupButtonsState();
   setProductsPlaceholder("Selecciona un usuario activo para ver productos.");
   setProductsFeedback("");
@@ -1410,6 +1808,10 @@ function showLoggedOutState() {
   setCashboxesPlaceholder("Selecciona un usuario activo para ver cajas.");
   setCashboxesFeedback("");
   renderSelectedCashboxDetail();
+  setBackupsPlaceholder("Selecciona un usuario activo para ver backups.");
+  setBackupsFeedback("");
+  setBackupSalesFeedback("Selecciona un backup para ver sus ventas.");
+  renderBackupSalesTable([]);
   planForm?.classList.add("hidden");
   userActionsPanel?.classList.add("hidden");
   globalLoadingNode?.classList.add("hidden");
@@ -1429,12 +1831,14 @@ function setActiveSection(sectionId) {
   activeSection = sectionId === "products" ? "products" : activeSection;
   activeSection = sectionId === "sales" ? "sales" : activeSection;
   activeSection = sectionId === "cashboxes" ? "cashboxes" : activeSection;
+  activeSection = sectionId === "backups" ? "backups" : activeSection;
 
   usersSection?.classList.toggle("hidden", activeSection !== "users");
   plansSection?.classList.toggle("hidden", activeSection !== "plans");
   productsSection?.classList.toggle("hidden", activeSection !== "products");
   salesSection?.classList.toggle("hidden", activeSection !== "sales");
   cashboxesSection?.classList.toggle("hidden", activeSection !== "cashboxes");
+  backupsSection?.classList.toggle("hidden", activeSection !== "backups");
 
 
   navUsersBtn?.classList.toggle("is-active", activeSection === "users");
@@ -1442,6 +1846,7 @@ function setActiveSection(sectionId) {
   navProductsBtn?.classList.toggle("is-active", activeSection === "products");
   navSalesBtn?.classList.toggle("is-active", activeSection === "sales");
   navCashboxesBtn?.classList.toggle("is-active", activeSection === "cashboxes");
+  navBackupsBtn?.classList.toggle("is-active", activeSection === "backups");
 
   if (activeSection === "products" && selectedProductsTenantId) {
     void loadProductsForSelectedUser();
@@ -1451,6 +1856,9 @@ function setActiveSection(sectionId) {
   }
   if (activeSection === "cashboxes" && selectedCashboxesTenantId) {
     void loadCashboxesForSelectedUser();
+  }
+  if (activeSection === "backups" && selectedBackupsTenantId) {
+    void loadBackupsForSelectedUser();
   }
 }
 
@@ -1564,10 +1972,28 @@ function setCashboxesPlaceholder(message) {
   cashboxesTableBody.innerHTML = `<tr><td colspan="7">${escapeHtml(String(message || "Sin datos."))}</td></tr>`;
 }
 
+function setBackupsFeedback(message) {
+  if (!backupsFeedbackNode) return;
+  backupsFeedbackNode.textContent = String(message || "");
+}
+
+function setBackupsPlaceholder(message) {
+  if (!backupsTableBody) return;
+  backupsTableBody.innerHTML = `<tr><td colspan="5">${escapeHtml(String(message || "Sin datos."))}</td></tr>`;
+}
+
+function setBackupSalesFeedback(message) {
+  if (!backupSalesFeedbackNode) return;
+  backupSalesFeedbackNode.textContent = String(message || "");
+}
+
 function syncBackupButtonsState() {
   if (productsBackupBtn) productsBackupBtn.disabled = !selectedProductsTenantId;
   if (salesBackupBtn) salesBackupBtn.disabled = !selectedSalesTenantId;
   if (cashboxesBackupBtn) cashboxesBackupBtn.disabled = !selectedCashboxesTenantId;
+  if (backupDownloadBtn) {
+    backupDownloadBtn.disabled = !selectedBackupsTenantId || !selectedBackupRowPath;
+  }
 }
 
 function createSectionBackup({
@@ -2020,4 +2446,13 @@ function formatMoney(value) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })}`;
+}
+
+function formatBytes(value) {
+  const bytes = Number(value || 0);
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }

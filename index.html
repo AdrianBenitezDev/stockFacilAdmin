@@ -43,6 +43,7 @@
         <button id="admin-nav-products-btn" type="button" class="mode-btn-secondary">Productos</button>
         <button id="admin-nav-sales-btn" type="button" class="mode-btn-secondary">Ventas</button>
         <button id="admin-nav-cashboxes-btn" type="button" class="mode-btn-secondary">Cajas</button>
+        <button id="admin-nav-backups-btn" type="button" class="mode-btn-secondary">Backup</button>
       </div>
 
       <section id="admin-users-section">
@@ -313,6 +314,74 @@
           <h4>Productos incluidos</h4>
           <p id="admin-cashbox-products-feedback" class="subtitle">Sin productos seleccionados.</p>
           <pre id="admin-cashbox-products-content" class="cashbox-detail-content">[]</pre>
+        </section>
+      </section>
+
+      <section id="admin-backups-section" class="hidden">
+        <p class="subtitle">Explora backups de ventas por usuario activo.</p>
+        <p id="admin-backups-feedback" class="feedback" aria-live="polite"></p>
+
+        <div class="products-filters">
+          <div class="products-filter-group">
+            <label for="admin-backups-user-select" class="users-filters-label">Usuario activo</label>
+            <select id="admin-backups-user-select">
+              <option value="">Selecciona un usuario...</option>
+            </select>
+          </div>
+
+          <div class="products-filter-group">
+            <label for="admin-backups-search" class="users-filters-label">Buscar backup</label>
+            <input
+              id="admin-backups-search"
+              type="search"
+              placeholder="Nombre archivo o usuario"
+              autocomplete="off"
+            >
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Archivo</th>
+                <th>Usuario</th>
+                <th>Fecha</th>
+                <th>Tamanio</th>
+                <th>Accion</th>
+              </tr>
+            </thead>
+            <tbody id="admin-backups-table-body">
+              <tr>
+                <td colspan="5">Selecciona un usuario activo para ver backups.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <section id="admin-backup-sales-panel" class="cashbox-detail-panel">
+          <h3>Ventas del backup</h3>
+          <p id="admin-backup-sales-feedback" class="subtitle">Selecciona un backup para ver sus ventas.</p>
+          <button id="admin-backup-download-btn" type="button" class="mode-btn-secondary backup-btn" disabled>Descargar backup seleccionado</button>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID venta</th>
+                  <th>Fecha</th>
+                  <th>Usuario</th>
+                  <th>Items</th>
+                  <th>Pago</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody id="admin-backup-sales-table-body">
+                <tr>
+                  <td colspan="6">Sin datos.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </section>
       </section>
 
