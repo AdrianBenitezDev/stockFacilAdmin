@@ -698,21 +698,23 @@ function normalizeSalesRows(source) {
   return source
     .map((row) => {
       const id = String(row?.id || row?.saleId || row?.ventaId || "").trim();
-      const fecha = row?.fecha || row?.createdAt || row?.timestamp || "";
+      const fechaRaw = row?.fecha || row?.createdAt || row?.timestamp || "";
       const cliente = String(row?.cliente || row?.customerName || row?.customer || "").trim();
       const vendedor = String(row?.vendedor || row?.employeeName || row?.employee || "").trim();
       const metodoPago = String(row?.metodoPago || row?.paymentMethod || "").trim();
       const total = Number(row?.total ?? row?.importeTotal ?? row?.amount ?? 0);
+      const fechaTs = getTimestampFromUnknownDate(fechaRaw);
       return {
         id: id || "-",
-        fecha: formatDate(fecha),
+        fecha: formatDate(fechaRaw),
+        fechaTs,
         cliente: cliente || "-",
         vendedor: vendedor || "-",
         metodoPago: metodoPago || "-",
         total: Number.isFinite(total) ? total : 0
       };
     })
-    .sort((a, b) => String(b.fecha || "").localeCompare(String(a.fecha || "")));
+    .sort((a, b) => Number(b.fechaTs || 0) - Number(a.fechaTs || 0));
 }
 
 function renderSalesTable(rows) {
@@ -722,7 +724,8 @@ function renderSalesTable(rows) {
     return;
   }
 
-  salesTableBody.innerHTML = rows
+  const orderedRows = [...rows].sort((a, b) => Number(b.fechaTs || 0) - Number(a.fechaTs || 0));
+  salesTableBody.innerHTML = orderedRows
     .map((row) =>
       [
         "<tr>",
@@ -1681,9 +1684,17 @@ function toggleActionButtons(loading) {
 
 function formatDate(value) {
   if (!value) return "-";
-  const date = new Date(value);
+  const ts = getTimestampFromUnknownDate(value);
+  if (!Number.isFinite(ts) || ts <= 0) return "-";
+  const date = new Date(ts);
   if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleString("es-AR");
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const yyyy = date.getFullYear();
+  const time = date
+    .toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true })
+    .replace(" ", "");
+  return `${dd}/${mm}/${yyyy} ${time}`;
 }
 
 function escapeHtml(value) {
