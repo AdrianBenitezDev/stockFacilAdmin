@@ -9,7 +9,10 @@ import {
   signOut
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
 
-const ADMIN_EMAIL = "artbenitezdev@gmail.com";
+const ALLOWED_ADMIN_EMAILS = new Set([
+  "artbenitezdev@gmail.com",
+  "admin@stockfacil.com.ar"
+]);
 
 const firebaseConfig = {
   apiKey: "AIzaSyDyYK9NtitNWkIiK-UIPUKCZ3PwJ1a10t0",
@@ -179,7 +182,7 @@ async function init() {
       return;
     }
     const email = String(user.email || "").trim().toLowerCase();
-    if (email !== ADMIN_EMAIL) {
+    if (!ALLOWED_ADMIN_EMAILS.has(email)) {
       await signOut(auth);
       setFeedback("Esta cuenta no tiene permisos de administrador.");
       showLoggedOutState();
