@@ -8,6 +8,7 @@ import {
   signInWithPopup,
   signOut
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+import { BUSINESS_CATALOG_SEED } from "./businessCatalogSeed.js";
 
 const ALLOWED_ADMIN_EMAILS = new Set([
   "artbenitezdev@gmail.com",
@@ -60,6 +61,7 @@ const metricTotalEmployees = document.getElementById("metric-total-employees");
 const metricTotalProducts = document.getElementById("metric-total-products");
 const metricEstimatedRevenue = document.getElementById("metric-estimated-revenue");
 const plansFeedbackNode = document.getElementById("admin-plans-feedback");
+const seedBusinessCatalogBtn = document.getElementById("admin-seed-business-catalog-btn");
 const planCardsNode = document.getElementById("admin-plan-cards");
 const planForm = document.getElementById("admin-plan-form");
 const planIdInput = document.getElementById("admin-plan-id");
@@ -172,6 +174,7 @@ async function init() {
   tableBody?.addEventListener("click", handleUserRowClick);
   planCardsNode?.addEventListener("click", handlePlanCardClick);
   planForm?.addEventListener("submit", handlePlanSave);
+  seedBusinessCatalogBtn?.addEventListener("click", handleSeedBusinessCatalogClick);
   toggleUserStatusBtn?.addEventListener("click", handleToggleUserStatus);
   openWhatsappBtn?.addEventListener("click", openSelectedUserWhatsapp);
   employeesTableBody?.addEventListener("click", handleEmployeeToggleClick);
@@ -381,6 +384,11 @@ function getAdminOverviewEndpoint() {
 function getAdminPlansEndpoint() {
   const projectId = String(firebaseConfig?.projectId || "").trim();
   return `https://us-central1-${projectId}.cloudfunctions.net/adminManagePlans`;
+}
+
+function getAdminSeedBusinessCatalogEndpoint() {
+  const projectId = String(firebaseConfig?.projectId || "").trim();
+  return `https://us-central1-${projectId}.cloudfunctions.net/adminSeedBusinessCatalog`;
 }
 
 function getAdminAccountsEndpoint() {
@@ -1728,6 +1736,46 @@ async function handlePlanSave(event) {
     setPlansFeedback(error.message || "No se pudo guardar el plan.");
   } finally {
     if (planSaveBtn) planSaveBtn.disabled = false;
+  }
+}
+
+async function handleSeedBusinessCatalogClick() {
+  if (!auth.currentUser) return;
+  if (!seedBusinessCatalogBtn) return;
+
+  const confirmed = window.confirm(
+    "Esto va a sobreescribir configuraciones/catalogo_negocios. Deseas continuar?"
+  );
+  if (!confirmed) return;
+
+  seedBusinessCatalogBtn.disabled = true;
+  setPlansFeedback("Publicando seed de catalogo...");
+  try {
+    const token = await auth.currentUser.getIdToken(true);
+    const response = await fetchWithLoading(getAdminSeedBusinessCatalogEndpoint(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ catalog: BUSINESS_CATALOG_SEED })
+    });
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      throw new Error(result?.error || "No se pudo publicar el catalogo.");
+    }
+
+    setPlansFeedback(
+      `Catalogo actualizado. Version ${Number(result?.version || 0)}. Tipos: ${Number(
+        result?.businessTypesCount || 0
+      )}.`
+    );
+  } catch (error) {
+    console.error(error);
+    setPlansFeedback(error.message || "No se pudo publicar el catalogo.");
+  } finally {
+    seedBusinessCatalogBtn.disabled = false;
   }
 }
 
