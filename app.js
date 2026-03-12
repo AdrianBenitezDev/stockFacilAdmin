@@ -398,8 +398,7 @@ async function selectUserRow(row) {
   userActionsPanel?.classList.remove("hidden");
   renderUserDocOverlayLoading(selectedUserRow);
 
-  const detailsPromise = loadSelectedUserAccountDetails();
-  void loadAndRenderSelectedUserDocs(selectedUserRow, detailsPromise);
+  void loadAndRenderSelectedUserDocs(selectedUserRow, () => loadSelectedUserAccountDetails());
 }
 
 function getAdminOverviewEndpoint() {
@@ -2657,7 +2656,7 @@ function isStaleUserDocRequest(requestId, uid) {
   return requestId !== latestUserDocRequestId || selectedUserUid !== uid;
 }
 
-async function loadAndRenderSelectedUserDocs(row, detailsPromise = null) {
+async function loadAndRenderSelectedUserDocs(row, detailsLoader = null) {
   const uid = String(row?.uid || "").trim();
   const tenantId = String(row?.tenantId || "").trim();
   if (!uid) {
@@ -2680,8 +2679,8 @@ async function loadAndRenderSelectedUserDocs(row, detailsPromise = null) {
     }
 
     let detailsPayload = null;
-    if (detailsPromise && typeof detailsPromise.then === "function") {
-      detailsPayload = await detailsPromise.catch(() => null);
+    if (typeof detailsLoader === "function") {
+      detailsPayload = await detailsLoader().catch(() => null);
     }
     if (isStaleUserDocRequest(requestId, uid)) return;
 
