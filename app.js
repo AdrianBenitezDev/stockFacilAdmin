@@ -147,7 +147,7 @@ const ADMIN_CACHE_DB_VERSION = 2;
 const CASHBOXES_CACHE_STORE = "cashboxes_by_tenant";
 const USER_DOCS_CACHE_STORE = "user_tenant_docs_by_uid";
 const USER_COLLECTION_CANDIDATES = ["usuarios", "usuario", "users", "employers", "empleadores"];
-const TENANT_COLLECTION_CANDIDATES = ["tenantId"];
+const TENANT_COLLECTION_CANDIDATES = ["tenants"];
 let adminCacheDbPromise = null;
 
 init().catch((error) => {
