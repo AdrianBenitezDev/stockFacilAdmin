@@ -8,7 +8,6 @@ import {
   signInWithPopup,
   signOut
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
-import { doc, getDoc, getFirestore } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { BUSINESS_CATALOG_SEED } from "./businessCatalogSeed.js";
 
 const ALLOWED_ADMIN_EMAILS = new Set([
@@ -27,7 +26,6 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-const firestoreDb = getFirestore(app);
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: "select_account" });
 
@@ -146,8 +144,6 @@ const ADMIN_CACHE_DB_NAME = "stockfacil-admin-cache";
 const ADMIN_CACHE_DB_VERSION = 2;
 const CASHBOXES_CACHE_STORE = "cashboxes_by_tenant";
 const USER_DOCS_CACHE_STORE = "user_tenant_docs_by_uid";
-const USER_COLLECTION_CANDIDATES = ["usuarios", "usuario", "users", "employers", "empleadores"];
-const TENANT_COLLECTION_CANDIDATES = ["tenants"];
 let adminCacheDbPromise = null;
 
 init().catch((error) => {
@@ -2548,7 +2544,10 @@ async function loadAndRenderSelectedUserDocs(row, detailsPromise = null) {
     };
 
     if (!hasAnyUserTenantDocs(mergedEntry)) {
-      renderUserDocOverlayError("No se encontraron docs de usuario/tenant en Firebase.", row);
+      renderUserDocOverlayError(
+        "No se encontraron docs de usuario/tenant en la respuesta de adminManageAccounts.",
+        row
+      );
       return;
     }
 
@@ -2562,36 +2561,13 @@ async function loadAndRenderSelectedUserDocs(row, detailsPromise = null) {
 }
 
 async function fetchUserTenantDocsFromFirebase(options = {}) {
-  const uid = String(options?.uid || "").trim();
-  const tenantId = String(options?.tenantId || "").trim();
   const extracted = extractUserTenantDocsFromAccountPayload(options?.detailsPayload);
 
-  let userDocData = extracted.userDoc;
-  let tenantDocData = extracted.tenantDoc;
-  let userCollection = extracted.userCollection;
-  let tenantCollection = extracted.tenantCollection;
-
-  if (uid) {
-    const userDocResult = await fetchDocFromCandidateCollections(USER_COLLECTION_CANDIDATES, uid);
-    if (userDocResult) {
-      userDocData = userDocResult.data;
-      userCollection = userDocResult.collection;
-    }
-  }
-
-  if (tenantId) {
-    const tenantDocResult = await fetchDocFromCandidateCollections(TENANT_COLLECTION_CANDIDATES, tenantId);
-    if (tenantDocResult) {
-      tenantDocData = tenantDocResult.data;
-      tenantCollection = tenantDocResult.collection;
-    }
-  }
-
   return {
-    userDoc: isObjectRecord(userDocData) ? userDocData : null,
-    tenantDoc: isObjectRecord(tenantDocData) ? tenantDocData : null,
-    userCollection: userCollection || "",
-    tenantCollection: tenantCollection || ""
+    userDoc: isObjectRecord(extracted?.userDoc) ? extracted.userDoc : null,
+    tenantDoc: isObjectRecord(extracted?.tenantDoc) ? extracted.tenantDoc : null,
+    userCollection: extracted?.userCollection || "",
+    tenantCollection: extracted?.tenantCollection || ""
   };
 }
 
@@ -2620,8 +2596,15 @@ function extractUserTenantDocsFromAccountPayload(payload) {
   const tenantDoc = getFirstObjectCandidate([
     payload.tenantDoc,
     payload.tenant,
+    payload.tenantData,
+    payload.tenantInfo,
     payload.tenantRaw,
     payload.tenant?.raw,
+    payload.employer?.tenant,
+    payload.employer?.tenantDoc,
+    payload.employer?.tenantData,
+    payload.account?.tenant,
+    payload.account?.tenantDoc,
     payload.businessDoc,
     payload.business,
     payload.negocioDoc,
@@ -2643,34 +2626,6 @@ function getFirstObjectCandidate(candidates) {
   for (const candidate of candidates) {
     if (isObjectRecord(candidate)) return candidate;
   }
-  return null;
-}
-
-async function fetchDocFromCandidateCollections(collectionNames, docId) {
-  const safeId = String(docId || "").trim();
-  if (!safeId || !Array.isArray(collectionNames) || !collectionNames.length) return null;
-
-  let firstError = null;
-  for (const collectionNameRaw of collectionNames) {
-    const collectionName = String(collectionNameRaw || "").trim();
-    if (!collectionName) continue;
-    try {
-      const snapshot = await getDoc(doc(firestoreDb, collectionName, safeId));
-      if (snapshot.exists()) {
-        return {
-          collection: collectionName,
-          data: snapshot.data()
-        };
-      }
-    } catch (error) {
-      if (!firstError) firstError = error;
-    }
-  }
-
-  if (firstError) {
-    console.error(`No se pudo leer ${safeId} desde las colecciones candidatas de Firestore.`, firstError);
-  }
-
   return null;
 }
 
