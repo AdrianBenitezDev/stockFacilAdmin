@@ -36,12 +36,14 @@ const loginBtn = document.getElementById("admin-login-btn");
 const logoutBtn = document.getElementById("admin-logout-btn");
 const refreshBtn = document.getElementById("admin-refresh-btn");
 const navUsersBtn = document.getElementById("admin-nav-users-btn");
+const navEmployeesBtn = document.getElementById("admin-nav-employees-btn");
 const navProductsBtn = document.getElementById("admin-nav-products-btn");
 const navPlansBtn = document.getElementById("admin-nav-plans-btn");
 const navSalesBtn = document.getElementById("admin-nav-sales-btn");
 const navCashboxesBtn = document.getElementById("admin-nav-cashboxes-btn");
 const navBackupsBtn = document.getElementById("admin-nav-backups-btn");
 const usersSection = document.getElementById("admin-users-section");
+const employeesSection = document.getElementById("admin-employees-section");
 const plansSection = document.getElementById("admin-plans-section");
 const productsSection = document.getElementById("admin-products-section");
 const salesSection = document.getElementById("admin-sales-section");
@@ -56,6 +58,8 @@ const userActionsPanel = document.getElementById("admin-user-actions-panel");
 const selectedUserMeta = document.getElementById("admin-selected-user-meta");
 const toggleUserStatusBtn = document.getElementById("admin-toggle-user-status-btn");
 const openWhatsappBtn = document.getElementById("admin-open-whatsapp-btn");
+const employeesFeedbackNode = document.getElementById("admin-employees-feedback");
+const employeesUserSelect = document.getElementById("admin-employees-user-select");
 const employeesTableBody = document.getElementById("admin-employees-table-body");
 const userDocOverlay = document.getElementById("admin-user-doc-overlay");
 const userDocOverlayMeta = document.getElementById("admin-user-doc-overlay-meta");
@@ -113,6 +117,9 @@ let activeSection = "users";
 let selectedUserUid = "";
 let selectedUserRow = null;
 let selectedEmployees = [];
+let selectedEmployeesUserUid = "";
+let selectedEmployeesTenantId = "";
+let latestEmployeesRequestId = 0;
 let latestUserDocRequestId = 0;
 let selectedProductsUserUid = "";
 let selectedProductsTenantId = "";
@@ -160,12 +167,14 @@ async function init() {
   logoutBtn?.addEventListener("click", handleLogout);
   refreshBtn?.addEventListener("click", handleRefresh);
   navUsersBtn?.addEventListener("click", () => setActiveSection("users"));
+  navEmployeesBtn?.addEventListener("click", () => setActiveSection("employees"));
   navPlansBtn?.addEventListener("click", () => setActiveSection("plans"));
   navProductsBtn?.addEventListener("click", () => setActiveSection("products"));
   navSalesBtn?.addEventListener("click", () => setActiveSection("sales"));
   navCashboxesBtn?.addEventListener("click", () => setActiveSection("cashboxes"));
   navBackupsBtn?.addEventListener("click", () => setActiveSection("backups"));
   usersSearchInput?.addEventListener("input", applyUsersFilter);
+  employeesUserSelect?.addEventListener("change", handleEmployeesUserSelectChange);
   productsUserSelect?.addEventListener("change", handleProductsUserSelectChange);
   productsSearchInput?.addEventListener("input", handleProductsSearchInput);
   productsBackupBtn?.addEventListener("click", handleProductsBackupClick);
@@ -229,6 +238,10 @@ async function handleLogout() {
 async function handleRefresh() {
   if (activeSection === "plans") {
     await loadPlans();
+    return;
+  }
+  if (activeSection === "employees") {
+    await loadEmployeesForSelectedUser();
     return;
   }
   if (activeSection === "products") {
@@ -295,9 +308,7 @@ function renderOverview(payload) {
       allUserRows.find((row) => String(row?.uid || "").trim() === selectedUserUid) || null;
     if (!selectedUserRow) {
       selectedUserUid = "";
-      selectedEmployees = [];
       userActionsPanel?.classList.add("hidden");
-      setEmployeesPlaceholder("Selecciona un usuario para ver sus empleados.");
     } else {
       renderSelectedUserActions();
     }
@@ -314,6 +325,7 @@ function renderOverview(payload) {
     allUserRows.reduce((acc, row) => acc + Number(row?.cantidadProductos || 0), 0)
   );
   updateEstimatedRevenueMetric();
+  renderEmployeesUserOptions();
   renderProductsUserOptions();
   renderSalesUserOptions();
   renderCashboxesUserOptions();
@@ -380,17 +392,14 @@ function handleUserRowClick(event) {
 async function selectUserRow(row) {
   selectedUserUid = String(row?.uid || "").trim();
   selectedUserRow = row || null;
-  selectedEmployees = [];
 
   applyUsersFilter();
   renderSelectedUserActions();
   userActionsPanel?.classList.remove("hidden");
-  setEmployeesLoading();
   renderUserDocOverlayLoading(selectedUserRow);
 
-  const detailsPromise = loadSelectedUserDetails();
+  const detailsPromise = loadSelectedUserAccountDetails();
   void loadAndRenderSelectedUserDocs(selectedUserRow, detailsPromise);
-  await detailsPromise;
 }
 
 function getAdminOverviewEndpoint() {
@@ -456,6 +465,41 @@ function getActiveScopedUsers() {
       tenantId: String(row?.tenantId || "").trim(),
       label: `${String(row?.nombre || "-").trim()} | ${String(row?.nombreNegocio || "-").trim()}`
     }));
+}
+
+function renderEmployeesUserOptions() {
+  if (!employeesUserSelect) return;
+
+  const activeUsers = getActiveScopedUsers();
+  const previousUserUid = selectedEmployeesUserUid;
+  const nextUserUid =
+    previousUserUid && activeUsers.some((item) => item.uid === previousUserUid)
+      ? previousUserUid
+      : activeUsers[0]?.uid || "";
+  const selectedUser = activeUsers.find((item) => item.uid === nextUserUid) || null;
+
+  selectedEmployeesUserUid = nextUserUid;
+  selectedEmployeesTenantId = selectedUser?.tenantId || "";
+  employeesUserSelect.innerHTML =
+    `<option value="">Selecciona un usuario...</option>` +
+    activeUsers
+      .map(
+        (item) =>
+          `<option value="${escapeHtml(item.uid)}"${item.uid === selectedEmployeesUserUid ? " selected" : ""}>${escapeHtml(item.label)}</option>`
+      )
+      .join("");
+  employeesUserSelect.disabled = activeUsers.length === 0;
+
+  if (!activeUsers.length) {
+    selectedEmployees = [];
+    setEmployeesPlaceholder("No hay usuarios activos para consultar empleados.");
+    setEmployeesFeedback("");
+    return;
+  }
+
+  if (activeSection === "employees") {
+    void loadEmployeesForSelectedUser();
+  }
 }
 
 function renderProductsUserOptions() {
@@ -613,6 +657,15 @@ function renderBackupsUserOptions() {
   if (activeSection === "backups") {
     void loadBackupsForSelectedUser();
   }
+}
+
+function handleEmployeesUserSelectChange() {
+  const uid = String(employeesUserSelect?.value || "").trim();
+  const row = allUserRows.find((entry) => String(entry?.uid || "").trim() === uid);
+  selectedEmployeesUserUid = uid;
+  selectedEmployeesTenantId = String(row?.tenantId || "").trim();
+  selectedEmployees = [];
+  void loadEmployeesForSelectedUser();
 }
 
 function handleProductsUserSelectChange() {
@@ -1812,6 +1865,9 @@ function showLoggedOutState() {
   selectedUserUid = "";
   selectedUserRow = null;
   selectedEmployees = [];
+  selectedEmployeesUserUid = "";
+  selectedEmployeesTenantId = "";
+  latestEmployeesRequestId = 0;
   latestUserDocRequestId = 0;
   selectedProductsUserUid = "";
   selectedProductsTenantId = "";
@@ -1858,6 +1914,10 @@ function showLoggedOutState() {
     productsUserSelect.innerHTML = '<option value="">Selecciona un usuario...</option>';
     productsUserSelect.disabled = true;
   }
+  if (employeesUserSelect) {
+    employeesUserSelect.innerHTML = '<option value="">Selecciona un usuario...</option>';
+    employeesUserSelect.disabled = true;
+  }
   if (salesUserSelect) {
     salesUserSelect.innerHTML = '<option value="">Selecciona un usuario...</option>';
     salesUserSelect.disabled = true;
@@ -1903,7 +1963,8 @@ function showLoggedOutState() {
     { estado: "Sin datos de tenant." },
     "Sin datos de tenant."
   );
-  setEmployeesPlaceholder("Selecciona un usuario para ver sus empleados.");
+  setEmployeesPlaceholder("Selecciona un usuario activo para ver sus empleados.");
+  setEmployeesFeedback("");
 }
 
 function showLoggedInState() {
@@ -1916,12 +1977,14 @@ function showLoggedInState() {
 
 function setActiveSection(sectionId) {
   activeSection = sectionId === "plans" ? "plans" : "users";
+  activeSection = sectionId === "employees" ? "employees" : activeSection;
   activeSection = sectionId === "products" ? "products" : activeSection;
   activeSection = sectionId === "sales" ? "sales" : activeSection;
   activeSection = sectionId === "cashboxes" ? "cashboxes" : activeSection;
   activeSection = sectionId === "backups" ? "backups" : activeSection;
 
   usersSection?.classList.toggle("hidden", activeSection !== "users");
+  employeesSection?.classList.toggle("hidden", activeSection !== "employees");
   plansSection?.classList.toggle("hidden", activeSection !== "plans");
   productsSection?.classList.toggle("hidden", activeSection !== "products");
   salesSection?.classList.toggle("hidden", activeSection !== "sales");
@@ -1930,12 +1993,16 @@ function setActiveSection(sectionId) {
 
 
   navUsersBtn?.classList.toggle("is-active", activeSection === "users");
+  navEmployeesBtn?.classList.toggle("is-active", activeSection === "employees");
   navPlansBtn?.classList.toggle("is-active", activeSection === "plans");
   navProductsBtn?.classList.toggle("is-active", activeSection === "products");
   navSalesBtn?.classList.toggle("is-active", activeSection === "sales");
   navCashboxesBtn?.classList.toggle("is-active", activeSection === "cashboxes");
   navBackupsBtn?.classList.toggle("is-active", activeSection === "backups");
 
+  if (activeSection === "employees" && selectedEmployeesTenantId) {
+    void loadEmployeesForSelectedUser();
+  }
   if (activeSection === "products" && selectedProductsTenantId) {
     void loadProductsForSelectedUser();
   }
@@ -2728,7 +2795,7 @@ async function loadTenantDocFromBackend(tenantId) {
   return result;
 }
 
-async function loadSelectedUserDetails() {
+async function loadSelectedUserAccountDetails() {
   if (!selectedUserRow || !auth.currentUser) return null;
 
   try {
@@ -2762,13 +2829,59 @@ async function loadSelectedUserDetails() {
       renderSelectedUserActions();
     }
 
-    selectedEmployees = Array.isArray(result?.employees) ? result.employees : [];
-    renderEmployeesTable();
     return result;
   } catch (error) {
     console.error(error);
-    setEmployeesPlaceholder(error.message || "No se pudieron cargar los empleados.");
+    setFeedback(error.message || "No se pudieron cargar los detalles de la cuenta.");
     return null;
+  }
+}
+
+async function loadEmployeesForSelectedUser() {
+  if (!auth.currentUser) return;
+  if (!selectedEmployeesUserUid || !selectedEmployeesTenantId) {
+    selectedEmployees = [];
+    setEmployeesPlaceholder("Selecciona un usuario activo para ver sus empleados.");
+    setEmployeesFeedback("");
+    return;
+  }
+
+  const requestId = ++latestEmployeesRequestId;
+  setEmployeesFeedback("Buscando empleados...");
+  setEmployeesLoading();
+
+  try {
+    const token = await auth.currentUser.getIdToken(true);
+    const params = new URLSearchParams({
+      uid: selectedEmployeesUserUid,
+      tenantId: selectedEmployeesTenantId
+    });
+    const response = await fetchWithLoading(`${getAdminAccountsEndpoint()}?${params.toString()}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      throw new Error(result?.error || "No se pudieron cargar los empleados.");
+    }
+    if (requestId !== latestEmployeesRequestId) return;
+
+    selectedEmployees = Array.isArray(result?.employees) ? result.employees : [];
+    renderEmployeesTable();
+    setEmployeesFeedback(
+      selectedEmployees.length
+        ? `${selectedEmployees.length} empleado(s) encontrado(s).`
+        : "No hay empleados para este usuario."
+    );
+  } catch (error) {
+    console.error(error);
+    if (requestId !== latestEmployeesRequestId) return;
+    selectedEmployees = [];
+    const errorMessage = error?.message || "No se pudieron cargar los empleados.";
+    setEmployeesPlaceholder(errorMessage);
+    setEmployeesFeedback(errorMessage);
   }
 }
 
@@ -2830,6 +2943,11 @@ function sanitizePhoneToDigits(value) {
   return digits.length >= 6 ? digits : "";
 }
 
+function setEmployeesFeedback(message) {
+  if (!employeesFeedbackNode) return;
+  employeesFeedbackNode.textContent = String(message || "");
+}
+
 function setEmployeesLoading() {
   if (!employeesTableBody) return;
   employeesTableBody.innerHTML = '<tr><td colspan="5">Cargando empleados...</td></tr>';
@@ -2866,11 +2984,16 @@ function renderEmployeesTable() {
 
 async function handleEmployeeToggleClick(event) {
   const target = event.target.closest("[data-employee-uid]");
-  if (!target || !auth.currentUser || !selectedUserRow) return;
+  if (!target || !auth.currentUser) return;
 
   const employeeUid = String(target.getAttribute("data-employee-uid") || "").trim();
   const nextActive = String(target.getAttribute("data-next-active") || "").trim() === "true";
+  const tenantId = String(selectedEmployeesTenantId || selectedUserRow?.tenantId || "").trim();
   if (!employeeUid) return;
+  if (!tenantId) {
+    setEmployeesFeedback("No se pudo resolver el tenant del usuario seleccionado.");
+    return;
+  }
 
   target.disabled = true;
   try {
@@ -2884,7 +3007,7 @@ async function handleEmployeeToggleClick(event) {
       body: JSON.stringify({
         targetType: "employee",
         uid: employeeUid,
-        tenantId: String(selectedUserRow?.tenantId || "").trim(),
+        tenantId,
         active: nextActive
       })
     });

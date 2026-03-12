@@ -322,6 +322,7 @@ button:hover {
 }
 
 #admin-users-search,
+#admin-employees-user-select,
 #admin-products-user-select,
 #admin-products-search,
 #admin-sales-user-select,
@@ -338,6 +339,7 @@ button:hover {
 }
 
 #admin-users-search:focus,
+#admin-employees-user-select:focus,
 #admin-products-user-select:focus,
 #admin-products-search:focus,
 #admin-sales-user-select:focus,
