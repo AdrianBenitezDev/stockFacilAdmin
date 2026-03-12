@@ -141,7 +141,7 @@ let selectedBackupRow = null;
 let pendingGlobalLoads = 0;
 
 const ADMIN_CACHE_DB_NAME = "stockfacil-admin-cache";
-const ADMIN_CACHE_DB_VERSION = 2;
+const ADMIN_CACHE_DB_VERSION = 3;
 const CASHBOXES_CACHE_STORE = "cashboxes_by_tenant";
 const USER_DOCS_CACHE_STORE = "user_tenant_docs_by_uid";
 let adminCacheDbPromise = null;
@@ -1954,6 +1954,9 @@ function openAdminCacheDb() {
       }
       if (!db.objectStoreNames.contains(USER_DOCS_CACHE_STORE)) {
         db.createObjectStore(USER_DOCS_CACHE_STORE, { keyPath: "uid" });
+      } else {
+        // Invalidamos cache antiguo de docs para forzar recalculo con la heuristica actual.
+        request.transaction?.objectStore(USER_DOCS_CACHE_STORE)?.clear();
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -2513,18 +2516,13 @@ function isUserDocForSelection(userDoc, uid) {
 function isTenantDocForSelection(tenantDoc, tenantId, uid) {
   if (!isObjectRecord(tenantDoc)) return false;
   const safeTenantId = String(tenantId || "").trim();
-  const safeUid = String(uid || "").trim();
+  const matchById = isDocIdMatch(tenantDoc?.id, safeTenantId);
+  const matchByTenantId = isDocIdMatch(tenantDoc?.tenantId, safeTenantId);
+  if (!safeTenantId) return true;
+  if (!matchById && !matchByTenantId) return false;
 
-  const tenantIdMatches =
-    !safeTenantId ||
-    isDocIdMatch(tenantDoc?.tenantId, safeTenantId) ||
-    isDocIdMatch(tenantDoc?.id, safeTenantId);
-  if (!tenantIdMatches) return false;
-
-  const docUid = String(tenantDoc?.uid || tenantDoc?.userId || "").trim();
-  if (safeUid && docUid && docUid === safeUid) {
-    return false;
-  }
+  if (matchById) return true;
+  if (looksLikeUserDoc(tenantDoc) && !looksLikeTenantDoc(tenantDoc)) return false;
   return true;
 }
 
@@ -2551,6 +2549,8 @@ function selectBestDocCandidate(candidates, options = {}) {
   }
 
   if (role === "tenant") {
+    const exactById = normalized.find((candidate) => isDocIdMatch(candidate?.id, tenantId));
+    if (exactById) return exactById;
     const exact = normalized.find((candidate) => isTenantDocForSelection(candidate, tenantId, uid));
     if (exact) return exact;
   }
@@ -2779,12 +2779,7 @@ function isLikelyEntityDoc(candidate, idValue, fields, options = {}) {
 
   const entityType = String(options?.entityType || "").trim().toLowerCase();
   if (entityType === "tenant") {
-    const candidateUid = String(candidate?.uid || candidate?.userId || "").trim();
-    if (matchedField === "tenantId" && candidateUid) {
-      return false;
-    }
-    const selectedUid = String(options?.selectedUid || "").trim();
-    if (selectedUid && candidateUid === selectedUid) {
+    if (matchedField === "tenantId" && looksLikeUserDoc(candidate) && !looksLikeTenantDoc(candidate)) {
       return false;
     }
   }
@@ -2795,6 +2790,37 @@ function isLikelyEntityDoc(candidate, idValue, fields, options = {}) {
   }
 
   return true;
+}
+
+function looksLikeUserDoc(candidate) {
+  if (!isObjectRecord(candidate)) return false;
+  const userHints = [
+    "email",
+    "telefono",
+    "phone",
+    "displayName",
+    "firstName",
+    "lastName",
+    "apellido",
+    "ultimoAcceso"
+  ];
+  return userHints.some((key) => candidate?.[key] !== undefined && candidate?.[key] !== null);
+}
+
+function looksLikeTenantDoc(candidate) {
+  if (!isObjectRecord(candidate)) return false;
+  const tenantHints = [
+    "tenantId",
+    "nombreNegocio",
+    "businessName",
+    "direccionNegocio",
+    "planActual",
+    "fechaPago",
+    "suscripcion",
+    "configuracion",
+    "settings"
+  ];
+  return tenantHints.some((key) => candidate?.[key] !== undefined && candidate?.[key] !== null);
 }
 
 async function loadSelectedUserDetails() {
