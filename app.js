@@ -147,7 +147,7 @@ const ADMIN_CACHE_DB_VERSION = 2;
 const CASHBOXES_CACHE_STORE = "cashboxes_by_tenant";
 const USER_DOCS_CACHE_STORE = "user_tenant_docs_by_uid";
 const USER_COLLECTION_CANDIDATES = ["usuarios", "usuario", "users", "employers", "empleadores"];
-const TENANT_COLLECTION_CANDIDATES = ["tenants", "tenant", "negocios", "businesses", "comercios"];
+const TENANT_COLLECTION_CANDIDATES = ["tenantId"];
 let adminCacheDbPromise = null;
 
 init().catch((error) => {
@@ -1888,8 +1888,16 @@ function showLoggedOutState() {
   if (userDocOverlayMeta) {
     userDocOverlayMeta.textContent = "Haz click en un usuario para ver el documento de usuario y tenant.";
   }
-  if (userDocOverlayUserContent) userDocOverlayUserContent.textContent = "{}";
-  if (userDocOverlayTenantContent) userDocOverlayTenantContent.textContent = "{}";
+  renderUserDocCardRows(
+    userDocOverlayUserContent,
+    { estado: "Sin datos de usuario." },
+    "Sin datos de usuario."
+  );
+  renderUserDocCardRows(
+    userDocOverlayTenantContent,
+    { estado: "Sin datos de tenant." },
+    "Sin datos de tenant."
+  );
   setEmployeesPlaceholder("Selecciona un usuario para ver sus empleados.");
 }
 
@@ -2358,8 +2366,16 @@ function renderUserDocOverlayLoading(row) {
     const tenantId = String(row?.tenantId || "").trim() || "-";
     userDocOverlayMeta.textContent = `UID ${uid} | Tenant ${tenantId} | Buscando en cache local...`;
   }
-  if (userDocOverlayUserContent) userDocOverlayUserContent.textContent = "Cargando doc de usuario...";
-  if (userDocOverlayTenantContent) userDocOverlayTenantContent.textContent = "Cargando doc de tenant...";
+  renderUserDocCardRows(
+    userDocOverlayUserContent,
+    { estado: "Cargando doc de usuario..." },
+    "Cargando doc de usuario..."
+  );
+  renderUserDocCardRows(
+    userDocOverlayTenantContent,
+    { estado: "Cargando doc de tenant..." },
+    "Cargando doc de tenant..."
+  );
 }
 
 function renderUserDocOverlayError(message, row) {
@@ -2370,20 +2386,16 @@ function renderUserDocOverlayError(message, row) {
     const tenantId = String(row?.tenantId || "").trim() || "-";
     userDocOverlayMeta.textContent = `UID ${uid} | Tenant ${tenantId} | ${errorMessage}`;
   }
-  if (userDocOverlayUserContent) {
-    userDocOverlayUserContent.textContent = JSON.stringify(
-      { error: errorMessage, doc: "usuario" },
-      null,
-      2
-    );
-  }
-  if (userDocOverlayTenantContent) {
-    userDocOverlayTenantContent.textContent = JSON.stringify(
-      { error: errorMessage, doc: "tenant" },
-      null,
-      2
-    );
-  }
+  renderUserDocCardRows(
+    userDocOverlayUserContent,
+    { doc: "usuario", error: errorMessage },
+    errorMessage
+  );
+  renderUserDocCardRows(
+    userDocOverlayTenantContent,
+    { doc: "tenant", error: errorMessage },
+    errorMessage
+  );
 }
 
 function renderUserDocOverlayPayload(payload, row) {
@@ -2412,12 +2424,65 @@ function renderUserDocOverlayPayload(payload, row) {
     ? payload.tenantDoc
     : { message: "Documento de tenant no encontrado." };
 
-  if (userDocOverlayUserContent) {
-    userDocOverlayUserContent.textContent = JSON.stringify(serializeForDisplay(userDoc), null, 2);
+  renderUserDocCardRows(userDocOverlayUserContent, userDoc, "Documento de usuario no encontrado.");
+  renderUserDocCardRows(userDocOverlayTenantContent, tenantDoc, "Documento de tenant no encontrado.");
+}
+
+function renderUserDocCardRows(container, value, fallbackMessage = "Sin datos.") {
+  if (!container) return;
+  container.innerHTML = "";
+
+  const serialized = serializeForDisplay(value);
+  if (!isObjectRecord(serialized)) {
+    appendUserDocCardRow(container, "valor", formatUserDocCardValue(serialized, fallbackMessage));
+    return;
   }
-  if (userDocOverlayTenantContent) {
-    userDocOverlayTenantContent.textContent = JSON.stringify(serializeForDisplay(tenantDoc), null, 2);
+
+  const keys = Object.keys(serialized);
+  if (!keys.length) {
+    appendUserDocCardRow(container, "estado", fallbackMessage);
+    return;
   }
+
+  keys.forEach((key) => {
+    appendUserDocCardRow(container, key, formatUserDocCardValue(serialized[key], fallbackMessage));
+  });
+}
+
+function appendUserDocCardRow(container, key, value) {
+  if (!container) return;
+  const row = document.createElement("p");
+  row.className = "user-doc-card-row";
+
+  const keyNode = document.createElement("span");
+  keyNode.className = "user-doc-card-key";
+  keyNode.textContent = String(key || "-");
+
+  const valueNode = document.createElement("span");
+  valueNode.className = "user-doc-card-value";
+  valueNode.textContent = String(value ?? "-");
+
+  row.appendChild(keyNode);
+  row.appendChild(valueNode);
+  container.appendChild(row);
+}
+
+function formatUserDocCardValue(value, fallbackMessage = "Sin datos.") {
+  if (value === null || value === undefined) return "-";
+  if (typeof value === "string") return value.trim() || "-";
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    if (!value.length) return "[]";
+    return JSON.stringify(value);
+  }
+  if (typeof value === "object") {
+    const keys = Object.keys(value);
+    if (!keys.length) return "{}";
+    return JSON.stringify(value);
+  }
+  return String(value);
 }
 
 function isObjectRecord(value) {
