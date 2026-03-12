@@ -409,6 +409,11 @@ function getAdminAccountsEndpoint() {
   return `https://us-central1-${projectId}.cloudfunctions.net/adminManageAccounts`;
 }
 
+function getAdminTenantEndpoint() {
+  const projectId = String(firebaseConfig?.projectId || "").trim();
+  return `https://us-central1-${projectId}.cloudfunctions.net/adminGetTenantById`;
+}
+
 function getAdminProductsEndpoint() {
   const projectId = String(firebaseConfig?.projectId || "").trim();
   return `https://us-central1-${projectId}.cloudfunctions.net/adminManageProducts`;
@@ -2496,68 +2501,6 @@ function hasCompleteUserTenantDocs(entry) {
   return isObjectRecord(entry?.userDoc) && isObjectRecord(entry?.tenantDoc);
 }
 
-function isDocIdMatch(value, expected) {
-  const left = String(value || "").trim();
-  const right = String(expected || "").trim();
-  return Boolean(left) && Boolean(right) && left === right;
-}
-
-function isUserDocForSelection(userDoc, uid) {
-  if (!isObjectRecord(userDoc)) return false;
-  const safeUid = String(uid || "").trim();
-  if (!safeUid) return true;
-  return (
-    isDocIdMatch(userDoc?.uid, safeUid) ||
-    isDocIdMatch(userDoc?.userId, safeUid) ||
-    isDocIdMatch(userDoc?.id, safeUid)
-  );
-}
-
-function isTenantDocForSelection(tenantDoc, tenantId, uid) {
-  if (!isObjectRecord(tenantDoc)) return false;
-  const safeTenantId = String(tenantId || "").trim();
-  const matchById = isDocIdMatch(tenantDoc?.id, safeTenantId);
-  const matchByTenantId = isDocIdMatch(tenantDoc?.tenantId, safeTenantId);
-  if (!safeTenantId) return true;
-  if (!matchById && !matchByTenantId) return false;
-
-  if (matchById) return true;
-  if (looksLikeUserDoc(tenantDoc) && !looksLikeTenantDoc(tenantDoc)) return false;
-  return true;
-}
-
-function isUserTenantEntryValid(entry, uid, tenantId) {
-  if (!isObjectRecord(entry)) return false;
-  return (
-    isUserDocForSelection(entry?.userDoc, uid) &&
-    isTenantDocForSelection(entry?.tenantDoc, tenantId, uid)
-  );
-}
-
-function selectBestDocCandidate(candidates, options = {}) {
-  if (!Array.isArray(candidates) || !candidates.length) return null;
-  const role = String(options?.role || "").trim().toLowerCase();
-  const uid = String(options?.uid || "").trim();
-  const tenantId = String(options?.tenantId || "").trim();
-
-  const normalized = candidates.filter((candidate) => isObjectRecord(candidate));
-  if (!normalized.length) return null;
-
-  if (role === "user") {
-    const exact = normalized.find((candidate) => isUserDocForSelection(candidate, uid));
-    if (exact) return exact;
-  }
-
-  if (role === "tenant") {
-    const exactById = normalized.find((candidate) => isDocIdMatch(candidate?.id, tenantId));
-    if (exactById) return exactById;
-    const exact = normalized.find((candidate) => isTenantDocForSelection(candidate, tenantId, uid));
-    if (exact) return exact;
-  }
-
-  return normalized[0] || null;
-}
-
 function isStaleUserDocRequest(requestId, uid) {
   return requestId !== latestUserDocRequestId || selectedUserUid !== uid;
 }
@@ -2572,8 +2515,7 @@ async function loadAndRenderSelectedUserDocs(row, detailsPromise = null) {
 
   const requestId = ++latestUserDocRequestId;
   try {
-    const cachedEntryRaw = await getCachedUserDocsEntry(uid, tenantId);
-    const cachedEntry = isUserTenantEntryValid(cachedEntryRaw, uid, tenantId) ? cachedEntryRaw : null;
+    const cachedEntry = await getCachedUserDocsEntry(uid, tenantId);
     if (isStaleUserDocRequest(requestId, uid)) return;
 
     if (hasCompleteUserTenantDocs(cachedEntry)) {
@@ -2591,20 +2533,27 @@ async function loadAndRenderSelectedUserDocs(row, detailsPromise = null) {
     }
     if (isStaleUserDocRequest(requestId, uid)) return;
 
-    const remoteEntry = await fetchUserTenantDocsFromFirebase({
-      uid,
-      tenantId,
-      detailsPayload
-    });
+    const tenantPayload = await loadTenantDocFromBackend(tenantId);
     if (isStaleUserDocRequest(requestId, uid)) return;
+
+    const userDoc = extractUserDocFromPayload(detailsPayload) || cachedEntry?.userDoc || null;
+    const tenantDoc =
+      extractTenantDocFromPayload(tenantPayload) ||
+      extractTenantDocFromPayload(detailsPayload) ||
+      cachedEntry?.tenantDoc ||
+      null;
 
     const mergedEntry = {
       uid,
       tenantId,
-      userDoc: remoteEntry?.userDoc || cachedEntry?.userDoc || null,
-      tenantDoc: remoteEntry?.tenantDoc || cachedEntry?.tenantDoc || null,
-      userCollection: remoteEntry?.userCollection || cachedEntry?.userCollection || "",
-      tenantCollection: remoteEntry?.tenantCollection || cachedEntry?.tenantCollection || "",
+      userDoc,
+      tenantDoc,
+      userCollection: userDoc ? "adminManageAccounts" : "",
+      tenantCollection: tenantDoc
+        ? tenantPayload
+          ? "adminGetTenantById"
+          : "adminManageAccounts"
+        : "",
       updatedAt: Date.now(),
       source: "firebase"
     };
@@ -2626,37 +2575,11 @@ async function loadAndRenderSelectedUserDocs(row, detailsPromise = null) {
   }
 }
 
-async function fetchUserTenantDocsFromFirebase(options = {}) {
-  const uid = String(options?.uid || "").trim();
-  const tenantId = String(options?.tenantId || "").trim();
-  const extracted = extractUserTenantDocsFromAccountPayload(options?.detailsPayload, {
-    uid,
-    tenantId
-  });
-
-  return {
-    userDoc: isObjectRecord(extracted?.userDoc) ? extracted.userDoc : null,
-    tenantDoc: isObjectRecord(extracted?.tenantDoc) ? extracted.tenantDoc : null,
-    userCollection: extracted?.userCollection || "",
-    tenantCollection: extracted?.tenantCollection || ""
-  };
-}
-
-function extractUserTenantDocsFromAccountPayload(payload, options = {}) {
+function extractUserDocFromPayload(payload) {
   if (!isObjectRecord(payload)) {
-    return {
-      userDoc: null,
-      tenantDoc: null,
-      userCollection: "",
-      tenantCollection: ""
-    };
+    return null;
   }
-
-  const uid = String(options?.uid || "").trim();
-  const tenantId = String(options?.tenantId || "").trim();
-
-  let userDoc = selectBestDocCandidate(
-    [
+  return getFirstObjectCandidate([
     payload.userDoc,
     payload.usuarioDoc,
     payload.user,
@@ -2667,15 +2590,12 @@ function extractUserTenantDocsFromAccountPayload(payload, options = {}) {
     payload.employer?.raw,
     payload.docs?.user,
     payload.docs?.usuario
-    ],
-    {
-      role: "user",
-      uid,
-      tenantId
-    }
-  );
-  let tenantDoc = selectBestDocCandidate(
-    [
+  ]);
+}
+
+function extractTenantDocFromPayload(payload) {
+  if (!isObjectRecord(payload)) return null;
+  return getFirstObjectCandidate([
     payload.tenantDoc,
     payload.tenant,
     payload.tenantData,
@@ -2693,134 +2613,34 @@ function extractUserTenantDocsFromAccountPayload(payload, options = {}) {
     payload.negocio,
     payload.docs?.tenant,
     payload.docs?.negocio
-    ],
-    {
-      role: "tenant",
-      uid,
-      tenantId
-    }
-  );
-
-  if (!isObjectRecord(userDoc) && uid) {
-    userDoc = findObjectByIdInPayload(payload, uid, ["uid", "userId", "id"], {
-      entityType: "user",
-      selectedUid: uid,
-      selectedTenantId: tenantId
-    });
-  }
-  if (!isObjectRecord(tenantDoc) && tenantId) {
-    tenantDoc =
-      findObjectByIdInPayload(payload, tenantId, ["id"], {
-        entityType: "tenant",
-        selectedUid: uid,
-        selectedTenantId: tenantId
-      }) ||
-      findObjectByIdInPayload(payload, tenantId, ["tenantId"], {
-        entityType: "tenant",
-        selectedUid: uid,
-        selectedTenantId: tenantId
-      });
-  }
-
-  return {
-    userDoc,
-    tenantDoc,
-    userCollection: userDoc ? "adminManageAccounts" : "",
-    tenantCollection: tenantDoc ? "adminManageAccounts" : ""
-  };
+  ]);
 }
 
-function findObjectByIdInPayload(root, idValue, fields = [], options = {}) {
-  const safeId = String(idValue || "").trim();
-  if (!safeId || !root || typeof root !== "object") return null;
-
-  const queue = [root];
-  const seen = new WeakSet();
-  while (queue.length) {
-    const current = queue.shift();
-    if (!current || typeof current !== "object") continue;
-    if (seen.has(current)) continue;
-    seen.add(current);
-
-    if (Array.isArray(current)) {
-      current.forEach((entry) => queue.push(entry));
-      continue;
-    }
-
-    if (isLikelyEntityDoc(current, safeId, fields, options)) {
-      return current;
-    }
-
-    Object.values(current).forEach((entry) => {
-      if (entry && typeof entry === "object") {
-        queue.push(entry);
-      }
-    });
+function getFirstObjectCandidate(candidates) {
+  if (!Array.isArray(candidates)) return null;
+  for (const candidate of candidates) {
+    if (isObjectRecord(candidate)) return candidate;
   }
   return null;
 }
 
-function isLikelyEntityDoc(candidate, idValue, fields, options = {}) {
-  if (!isObjectRecord(candidate)) return false;
-  const keyCount = Object.keys(candidate).length;
-  if (keyCount < 2) return false;
+async function loadTenantDocFromBackend(tenantId) {
+  const safeTenantId = String(tenantId || "").trim();
+  if (!safeTenantId || !auth.currentUser) return null;
 
-  const fieldList = Array.isArray(fields) ? fields : [];
-  let matchedField = "";
-  for (const field of fieldList) {
-    const fieldName = String(field || "").trim();
-    if (!fieldName) continue;
-    if (String(candidate?.[fieldName] || "").trim() === idValue) {
-      matchedField = fieldName;
-      break;
+  const token = await auth.currentUser.getIdToken(true);
+  const params = new URLSearchParams({ tenantId: safeTenantId });
+  const response = await fetchWithLoading(`${getAdminTenantEndpoint()}?${params.toString()}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`
     }
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.ok) {
+    throw new Error(result?.error || "No se pudo cargar el tenant.");
   }
-  if (!matchedField) return false;
-
-  const entityType = String(options?.entityType || "").trim().toLowerCase();
-  if (entityType === "tenant") {
-    if (matchedField === "tenantId" && looksLikeUserDoc(candidate) && !looksLikeTenantDoc(candidate)) {
-      return false;
-    }
-  }
-
-  if (entityType === "user") {
-    const userUid = String(candidate?.uid || candidate?.userId || "").trim();
-    if (!userUid) return false;
-  }
-
-  return true;
-}
-
-function looksLikeUserDoc(candidate) {
-  if (!isObjectRecord(candidate)) return false;
-  const userHints = [
-    "email",
-    "telefono",
-    "phone",
-    "displayName",
-    "firstName",
-    "lastName",
-    "apellido",
-    "ultimoAcceso"
-  ];
-  return userHints.some((key) => candidate?.[key] !== undefined && candidate?.[key] !== null);
-}
-
-function looksLikeTenantDoc(candidate) {
-  if (!isObjectRecord(candidate)) return false;
-  const tenantHints = [
-    "tenantId",
-    "nombreNegocio",
-    "businessName",
-    "direccionNegocio",
-    "planActual",
-    "fechaPago",
-    "suscripcion",
-    "configuracion",
-    "settings"
-  ];
-  return tenantHints.some((key) => candidate?.[key] !== undefined && candidate?.[key] !== null);
+  return result;
 }
 
 async function loadSelectedUserDetails() {
