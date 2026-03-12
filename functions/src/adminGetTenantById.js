@@ -8,7 +8,33 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 
+const ALLOWED_ORIGINS = new Set([
+  "https://admin.stockfacil.com.ar",
+  "https://kiosco-stock-493c6.web.app",
+  "https://kiosco-stock-493c6.firebaseapp.com",
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173"
+]);
+
+function applyCors(req, res) {
+  const origin = String(req.headers.origin || "").trim();
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
+    res.set("Access-Control-Allow-Origin", origin);
+  }
+  res.set("Vary", "Origin");
+  res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
+  res.set("Access-Control-Max-Age", "3600");
+}
+
 exports.adminGetTenantById = onRequest(async (req, res) => {
+  applyCors(req, res);
+  if (req.method === "OPTIONS") {
+    res.status(204).send("");
+    return;
+  }
+
   if (req.method !== "GET") {
     res.status(405).json({ ok: false, error: "Metodo no permitido." });
     return;
@@ -42,4 +68,3 @@ exports.adminGetTenantById = onRequest(async (req, res) => {
     res.status(500).json({ ok: false, error: "No se pudo cargar el tenant." });
   }
 });
-

@@ -49,6 +49,7 @@ const cashboxesSection = document.getElementById("admin-cashboxes-section");
 const backupsSection = document.getElementById("admin-backups-section");
 const usersSearchInput = document.getElementById("admin-users-search");
 const globalLoadingNode = document.getElementById("admin-global-loading");
+const globalToastNode = document.getElementById("admin-global-toast");
 const generatedAtNode = document.getElementById("admin-generated-at");
 const tableBody = document.getElementById("admin-users-table-body");
 const userActionsPanel = document.getElementById("admin-user-actions-panel");
@@ -139,6 +140,7 @@ let latestBackupsRequestId = 0;
 let selectedBackupRowPath = "";
 let selectedBackupRow = null;
 let pendingGlobalLoads = 0;
+let globalToastTimeout = null;
 
 const ADMIN_CACHE_DB_NAME = "stockfacil-admin-cache";
 const ADMIN_CACHE_DB_VERSION = 3;
@@ -181,6 +183,8 @@ async function init() {
   tableBody?.addEventListener("click", handleUserRowClick);
   userDocOverlay?.addEventListener("click", handleUserDocOverlayClick);
   userDocOverlayCloseBtn?.addEventListener("click", closeUserDocOverlay);
+  userDocOverlayUserContent?.addEventListener("click", handleUserDocCardRowCopyClick);
+  userDocOverlayTenantContent?.addEventListener("click", handleUserDocCardRowCopyClick);
   planCardsNode?.addEventListener("click", handlePlanCardClick);
   planForm?.addEventListener("submit", handlePlanSave);
   seedBusinessCatalogBtn?.addEventListener("click", handleSeedBusinessCatalogClick);
@@ -2313,6 +2317,39 @@ function hideGlobalLoading() {
   }
 }
 
+function showGlobalToast(message, type = "success") {
+  if (!globalToastNode) return;
+  const text = String(message || "").trim();
+  if (!text) return;
+
+  if (globalToastTimeout) {
+    clearTimeout(globalToastTimeout);
+    globalToastTimeout = null;
+  }
+
+  globalToastNode.textContent = text;
+  globalToastNode.classList.remove("hidden", "is-warning", "is-error");
+  if (type === "warning") {
+    globalToastNode.classList.add("is-warning");
+  } else if (type === "error") {
+    globalToastNode.classList.add("is-error");
+  }
+
+  globalToastTimeout = setTimeout(() => {
+    hideGlobalToast();
+  }, 2200);
+}
+
+function hideGlobalToast() {
+  if (!globalToastNode) return;
+  globalToastNode.classList.add("hidden");
+  globalToastNode.classList.remove("is-warning", "is-error");
+  if (globalToastTimeout) {
+    clearTimeout(globalToastTimeout);
+    globalToastTimeout = null;
+  }
+}
+
 function renderSelectedUserActions() {
   if (!selectedUserRow) {
     userActionsPanel?.classList.add("hidden");
@@ -2443,14 +2480,19 @@ function renderUserDocCardRows(container, value, fallbackMessage = "Sin datos.")
   }
 
   const keys = Object.keys(serialized);
-  if (!keys.length) {
+  const visibleKeys = keys.filter((key) => !shouldOmitUserDocKey(key));
+  if (!visibleKeys.length) {
     appendUserDocCardRow(container, "estado", fallbackMessage);
     return;
   }
 
-  keys.forEach((key) => {
+  visibleKeys.forEach((key) => {
     appendUserDocCardRow(container, key, formatUserDocCardValue(serialized[key], fallbackMessage));
   });
+}
+
+function shouldOmitUserDocKey(key) {
+  return String(key || "").trim().toUpperCase() === "REF";
 }
 
 function appendUserDocCardRow(container, key, value) {
@@ -2469,6 +2511,49 @@ function appendUserDocCardRow(container, key, value) {
   row.appendChild(keyNode);
   row.appendChild(valueNode);
   container.appendChild(row);
+}
+
+function handleUserDocCardRowCopyClick(event) {
+  const row = event.target?.closest?.(".user-doc-card-row");
+  if (!row) return;
+  const valueNode = row.querySelector(".user-doc-card-value");
+  const valueText = String(valueNode?.textContent || "").trim();
+  if (!valueText || valueText === "-") {
+    showGlobalToast("No hay valor para copiar.", "warning");
+    return;
+  }
+
+  void copyTextToClipboard(valueText)
+    .then(() => {
+      showGlobalToast("Copiado al portapapeles.");
+    })
+    .catch((error) => {
+      console.error(error);
+      showGlobalToast("No se pudo copiar el valor.", "error");
+    });
+}
+
+async function copyTextToClipboard(value) {
+  const text = String(value || "");
+  if (!text.trim()) return;
+  if (navigator?.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  const success = document.execCommand("copy");
+  document.body.removeChild(textarea);
+  if (!success) {
+    throw new Error("No se pudo copiar con fallback.");
+  }
 }
 
 function formatUserDocCardValue(value, fallbackMessage = "Sin datos.") {

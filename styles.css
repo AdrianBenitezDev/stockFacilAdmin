@@ -44,6 +44,32 @@ body {
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.2);
 }
 
+.global-toast {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 130;
+  max-width: min(92vw, 460px);
+  border: 1px solid #0f766e;
+  border-radius: 10px;
+  background: #0f766e;
+  color: #ffffff;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.24);
+}
+
+.global-toast.is-warning {
+  background: #b45309;
+  border-color: #b45309;
+}
+
+.global-toast.is-error {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
+
 .user-doc-overlay {
   position: fixed;
   inset: 0;
@@ -115,6 +141,12 @@ body {
   border: 1px solid #dbe3ef;
   border-radius: 8px;
   background: #ffffff;
+  cursor: pointer;
+}
+
+.user-doc-card-row:hover {
+  border-color: #94a3b8;
+  background: #f1f5f9;
 }
 
 .user-doc-card-key {
@@ -544,5 +576,11 @@ thead th {
   .user-doc-modal {
     padding: 0.75rem;
     max-height: calc(100vh - 4.9rem);
+  }
+
+  .global-toast {
+    right: 0.65rem;
+    bottom: 0.65rem;
+    max-width: calc(100vw - 1.3rem);
   }
 }
