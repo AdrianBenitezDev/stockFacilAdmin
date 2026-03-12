@@ -2493,6 +2493,71 @@ function hasCompleteUserTenantDocs(entry) {
   return isObjectRecord(entry?.userDoc) && isObjectRecord(entry?.tenantDoc);
 }
 
+function isDocIdMatch(value, expected) {
+  const left = String(value || "").trim();
+  const right = String(expected || "").trim();
+  return Boolean(left) && Boolean(right) && left === right;
+}
+
+function isUserDocForSelection(userDoc, uid) {
+  if (!isObjectRecord(userDoc)) return false;
+  const safeUid = String(uid || "").trim();
+  if (!safeUid) return true;
+  return (
+    isDocIdMatch(userDoc?.uid, safeUid) ||
+    isDocIdMatch(userDoc?.userId, safeUid) ||
+    isDocIdMatch(userDoc?.id, safeUid)
+  );
+}
+
+function isTenantDocForSelection(tenantDoc, tenantId, uid) {
+  if (!isObjectRecord(tenantDoc)) return false;
+  const safeTenantId = String(tenantId || "").trim();
+  const safeUid = String(uid || "").trim();
+
+  const tenantIdMatches =
+    !safeTenantId ||
+    isDocIdMatch(tenantDoc?.tenantId, safeTenantId) ||
+    isDocIdMatch(tenantDoc?.id, safeTenantId);
+  if (!tenantIdMatches) return false;
+
+  const docUid = String(tenantDoc?.uid || tenantDoc?.userId || "").trim();
+  if (safeUid && docUid && docUid === safeUid) {
+    return false;
+  }
+  return true;
+}
+
+function isUserTenantEntryValid(entry, uid, tenantId) {
+  if (!isObjectRecord(entry)) return false;
+  return (
+    isUserDocForSelection(entry?.userDoc, uid) &&
+    isTenantDocForSelection(entry?.tenantDoc, tenantId, uid)
+  );
+}
+
+function selectBestDocCandidate(candidates, options = {}) {
+  if (!Array.isArray(candidates) || !candidates.length) return null;
+  const role = String(options?.role || "").trim().toLowerCase();
+  const uid = String(options?.uid || "").trim();
+  const tenantId = String(options?.tenantId || "").trim();
+
+  const normalized = candidates.filter((candidate) => isObjectRecord(candidate));
+  if (!normalized.length) return null;
+
+  if (role === "user") {
+    const exact = normalized.find((candidate) => isUserDocForSelection(candidate, uid));
+    if (exact) return exact;
+  }
+
+  if (role === "tenant") {
+    const exact = normalized.find((candidate) => isTenantDocForSelection(candidate, tenantId, uid));
+    if (exact) return exact;
+  }
+
+  return normalized[0] || null;
+}
+
 function isStaleUserDocRequest(requestId, uid) {
   return requestId !== latestUserDocRequestId || selectedUserUid !== uid;
 }
@@ -2507,7 +2572,8 @@ async function loadAndRenderSelectedUserDocs(row, detailsPromise = null) {
 
   const requestId = ++latestUserDocRequestId;
   try {
-    const cachedEntry = await getCachedUserDocsEntry(uid, tenantId);
+    const cachedEntryRaw = await getCachedUserDocsEntry(uid, tenantId);
+    const cachedEntry = isUserTenantEntryValid(cachedEntryRaw, uid, tenantId) ? cachedEntryRaw : null;
     if (isStaleUserDocRequest(requestId, uid)) return;
 
     if (hasCompleteUserTenantDocs(cachedEntry)) {
@@ -2589,7 +2655,8 @@ function extractUserTenantDocsFromAccountPayload(payload, options = {}) {
   const uid = String(options?.uid || "").trim();
   const tenantId = String(options?.tenantId || "").trim();
 
-  let userDoc = getFirstObjectCandidate([
+  let userDoc = selectBestDocCandidate(
+    [
     payload.userDoc,
     payload.usuarioDoc,
     payload.user,
@@ -2600,8 +2667,15 @@ function extractUserTenantDocsFromAccountPayload(payload, options = {}) {
     payload.employer?.raw,
     payload.docs?.user,
     payload.docs?.usuario
-  ]);
-  let tenantDoc = getFirstObjectCandidate([
+    ],
+    {
+      role: "user",
+      uid,
+      tenantId
+    }
+  );
+  let tenantDoc = selectBestDocCandidate(
+    [
     payload.tenantDoc,
     payload.tenant,
     payload.tenantData,
@@ -2619,7 +2693,13 @@ function extractUserTenantDocsFromAccountPayload(payload, options = {}) {
     payload.negocio,
     payload.docs?.tenant,
     payload.docs?.negocio
-  ]);
+    ],
+    {
+      role: "tenant",
+      uid,
+      tenantId
+    }
+  );
 
   if (!isObjectRecord(userDoc) && uid) {
     userDoc = findObjectByIdInPayload(payload, uid, ["uid", "userId", "id"], {
@@ -2648,14 +2728,6 @@ function extractUserTenantDocsFromAccountPayload(payload, options = {}) {
     userCollection: userDoc ? "adminManageAccounts" : "",
     tenantCollection: tenantDoc ? "adminManageAccounts" : ""
   };
-}
-
-function getFirstObjectCandidate(candidates) {
-  if (!Array.isArray(candidates)) return null;
-  for (const candidate of candidates) {
-    if (isObjectRecord(candidate)) return candidate;
-  }
-  return null;
 }
 
 function findObjectByIdInPayload(root, idValue, fields = [], options = {}) {
