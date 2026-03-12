@@ -103,6 +103,24 @@
           </table>
         </div>
 
+        <div id="admin-user-doc-overlay" class="user-doc-overlay hidden" aria-hidden="true">
+          <div class="user-doc-modal" role="dialog" aria-modal="true" aria-labelledby="admin-user-doc-title">
+            <div class="user-doc-modal-header">
+              <h3 id="admin-user-doc-title">Detalle Firebase</h3>
+              <button id="admin-user-doc-overlay-close-btn" type="button" class="mode-btn-secondary">Cerrar</button>
+            </div>
+            <p id="admin-user-doc-overlay-meta" class="subtitle">
+              Haz click en un usuario para ver el documento de usuario y tenant.
+            </p>
+
+            <h4>Doc usuario</h4>
+            <pre id="admin-user-doc-overlay-user-content" class="user-doc-modal-content">{}</pre>
+
+            <h4>Doc tenant</h4>
+            <pre id="admin-user-doc-overlay-tenant-content" class="user-doc-modal-content">{}</pre>
+          </div>
+        </div>
+
         <section id="admin-user-actions-panel" class="user-actions-panel hidden">
           <h3>Acciones de cuenta</h3>
           <p id="admin-selected-user-meta" class="subtitle">Selecciona un usuario para administrar su cuenta.</p>

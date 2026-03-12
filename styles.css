@@ -44,6 +44,61 @@ body {
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.2);
 }
 
+.user-doc-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4.5rem 1rem 1rem;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(2px);
+}
+
+.user-doc-modal {
+  width: min(960px, 100%);
+  max-height: calc(100vh - 5.5rem);
+  overflow: auto;
+  border: 1px solid #cbd5e1;
+  border-radius: 14px;
+  padding: 1rem;
+  background: #ffffff;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.28);
+}
+
+.user-doc-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+
+.user-doc-modal-header h3 {
+  margin: 0;
+}
+
+.user-doc-modal-header button {
+  margin-top: 0;
+}
+
+.user-doc-modal h4 {
+  margin: 0.8rem 0 0.4rem;
+}
+
+.user-doc-modal-content {
+  margin: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 0.75rem;
+  max-height: 280px;
+  overflow: auto;
+  font-size: 0.83rem;
+  line-height: 1.35;
+}
+
 .global-spinner {
   width: 1rem;
   height: 1rem;
@@ -445,5 +500,14 @@ thead th {
 
   .user-actions-buttons {
     flex-direction: column;
+  }
+
+  .user-doc-overlay {
+    padding: 4.2rem 0.65rem 0.65rem;
+  }
+
+  .user-doc-modal {
+    padding: 0.75rem;
+    max-height: calc(100vh - 4.9rem);
   }
 }

@@ -8,6 +8,7 @@ import {
   signInWithPopup,
   signOut
 } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+import { doc, getDoc, getFirestore } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
 import { BUSINESS_CATALOG_SEED } from "./businessCatalogSeed.js";
 
 const ALLOWED_ADMIN_EMAILS = new Set([
@@ -26,6 +27,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const firestoreDb = getFirestore(app);
 const provider = new GoogleAuthProvider();
 provider.setCustomParameters({ prompt: "select_account" });
 
@@ -56,6 +58,11 @@ const selectedUserMeta = document.getElementById("admin-selected-user-meta");
 const toggleUserStatusBtn = document.getElementById("admin-toggle-user-status-btn");
 const openWhatsappBtn = document.getElementById("admin-open-whatsapp-btn");
 const employeesTableBody = document.getElementById("admin-employees-table-body");
+const userDocOverlay = document.getElementById("admin-user-doc-overlay");
+const userDocOverlayMeta = document.getElementById("admin-user-doc-overlay-meta");
+const userDocOverlayUserContent = document.getElementById("admin-user-doc-overlay-user-content");
+const userDocOverlayTenantContent = document.getElementById("admin-user-doc-overlay-tenant-content");
+const userDocOverlayCloseBtn = document.getElementById("admin-user-doc-overlay-close-btn");
 const metricTotalUsers = document.getElementById("metric-total-users");
 const metricTotalEmployees = document.getElementById("metric-total-employees");
 const metricTotalProducts = document.getElementById("metric-total-products");
@@ -107,6 +114,7 @@ let activeSection = "users";
 let selectedUserUid = "";
 let selectedUserRow = null;
 let selectedEmployees = [];
+let latestUserDocRequestId = 0;
 let selectedProductsUserUid = "";
 let selectedProductsTenantId = "";
 let allProductRows = [];
@@ -135,8 +143,11 @@ let selectedBackupRow = null;
 let pendingGlobalLoads = 0;
 
 const ADMIN_CACHE_DB_NAME = "stockfacil-admin-cache";
-const ADMIN_CACHE_DB_VERSION = 1;
+const ADMIN_CACHE_DB_VERSION = 2;
 const CASHBOXES_CACHE_STORE = "cashboxes_by_tenant";
+const USER_DOCS_CACHE_STORE = "user_tenant_docs_by_uid";
+const USER_COLLECTION_CANDIDATES = ["usuarios", "usuario", "users", "employers", "empleadores"];
+const TENANT_COLLECTION_CANDIDATES = ["tenants", "tenant", "negocios", "businesses", "comercios"];
 let adminCacheDbPromise = null;
 
 init().catch((error) => {
@@ -172,12 +183,15 @@ async function init() {
   backupsTableBody?.addEventListener("click", handleBackupRowClick);
   backupDownloadBtn?.addEventListener("click", handleBackupDownloadClick);
   tableBody?.addEventListener("click", handleUserRowClick);
+  userDocOverlay?.addEventListener("click", handleUserDocOverlayClick);
+  userDocOverlayCloseBtn?.addEventListener("click", closeUserDocOverlay);
   planCardsNode?.addEventListener("click", handlePlanCardClick);
   planForm?.addEventListener("submit", handlePlanSave);
   seedBusinessCatalogBtn?.addEventListener("click", handleSeedBusinessCatalogClick);
   toggleUserStatusBtn?.addEventListener("click", handleToggleUserStatus);
   openWhatsappBtn?.addEventListener("click", openSelectedUserWhatsapp);
   employeesTableBody?.addEventListener("click", handleEmployeeToggleClick);
+  document.addEventListener("keydown", handleGlobalKeydown);
 
   onAuthStateChanged(auth, async (user) => {
     if (!user) {
@@ -372,8 +386,11 @@ async function selectUserRow(row) {
   renderSelectedUserActions();
   userActionsPanel?.classList.remove("hidden");
   setEmployeesLoading();
+  renderUserDocOverlayLoading(selectedUserRow);
 
-  await loadSelectedUserDetails();
+  const detailsPromise = loadSelectedUserDetails();
+  void loadAndRenderSelectedUserDocs(selectedUserRow, detailsPromise);
+  await detailsPromise;
 }
 
 function getAdminOverviewEndpoint() {
@@ -1790,6 +1807,7 @@ function showLoggedOutState() {
   selectedUserUid = "";
   selectedUserRow = null;
   selectedEmployees = [];
+  latestUserDocRequestId = 0;
   selectedProductsUserUid = "";
   selectedProductsTenantId = "";
   allProductRows = [];
@@ -1866,6 +1884,12 @@ function showLoggedOutState() {
   planForm?.classList.add("hidden");
   userActionsPanel?.classList.add("hidden");
   globalLoadingNode?.classList.add("hidden");
+  closeUserDocOverlay();
+  if (userDocOverlayMeta) {
+    userDocOverlayMeta.textContent = "Haz click en un usuario para ver el documento de usuario y tenant.";
+  }
+  if (userDocOverlayUserContent) userDocOverlayUserContent.textContent = "{}";
+  if (userDocOverlayTenantContent) userDocOverlayTenantContent.textContent = "{}";
   setEmployeesPlaceholder("Selecciona un usuario para ver sus empleados.");
 }
 
@@ -1924,6 +1948,9 @@ function openAdminCacheDb() {
       if (!db.objectStoreNames.contains(CASHBOXES_CACHE_STORE)) {
         db.createObjectStore(CASHBOXES_CACHE_STORE, { keyPath: "tenantId" });
       }
+      if (!db.objectStoreNames.contains(USER_DOCS_CACHE_STORE)) {
+        db.createObjectStore(USER_DOCS_CACHE_STORE, { keyPath: "uid" });
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => {
@@ -1965,6 +1992,62 @@ async function saveCachedCashboxesRows(tenantId, rows) {
       store.put({
         tenantId: String(tenantId || "").trim(),
         rows: Array.isArray(rows) ? rows : [],
+        updatedAt: Date.now()
+      });
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+      tx.onabort = () => resolve(false);
+    });
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function getCachedUserDocsEntry(uid, tenantId) {
+  try {
+    const db = await openAdminCacheDb();
+    const safeUid = String(uid || "").trim();
+    const safeTenantId = String(tenantId || "").trim();
+    if (!db || !safeUid) return null;
+    return await new Promise((resolve) => {
+      const tx = db.transaction(USER_DOCS_CACHE_STORE, "readonly");
+      const store = tx.objectStore(USER_DOCS_CACHE_STORE);
+      const request = store.get(safeUid);
+      request.onsuccess = () => {
+        const record = request.result;
+        if (!isObjectRecord(record)) {
+          resolve(null);
+          return;
+        }
+        if (safeTenantId && String(record?.tenantId || "").trim() !== safeTenantId) {
+          resolve(null);
+          return;
+        }
+        resolve(record);
+      };
+      request.onerror = () => resolve(null);
+    });
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+async function saveCachedUserDocsEntry(uid, tenantId, entry) {
+  try {
+    const db = await openAdminCacheDb();
+    const safeUid = String(uid || "").trim();
+    if (!db || !safeUid || !isObjectRecord(entry)) return;
+    await new Promise((resolve) => {
+      const tx = db.transaction(USER_DOCS_CACHE_STORE, "readwrite");
+      const store = tx.objectStore(USER_DOCS_CACHE_STORE);
+      store.put({
+        uid: safeUid,
+        tenantId: String(tenantId || "").trim(),
+        userDoc: isObjectRecord(entry?.userDoc) ? entry.userDoc : null,
+        tenantDoc: isObjectRecord(entry?.tenantDoc) ? entry.tenantDoc : null,
+        userCollection: String(entry?.userCollection || "").trim(),
+        tenantCollection: String(entry?.tenantCollection || "").trim(),
         updatedAt: Date.now()
       });
       tx.oncomplete = () => resolve(true);
@@ -2244,8 +2327,290 @@ function renderSelectedUserActions() {
   }
 }
 
+function openUserDocOverlay() {
+  userDocOverlay?.classList.remove("hidden");
+  if (userDocOverlay) userDocOverlay.setAttribute("aria-hidden", "false");
+}
+
+function closeUserDocOverlay() {
+  latestUserDocRequestId += 1;
+  userDocOverlay?.classList.add("hidden");
+  if (userDocOverlay) userDocOverlay.setAttribute("aria-hidden", "true");
+}
+
+function handleUserDocOverlayClick(event) {
+  if (!userDocOverlay) return;
+  if (event.target === userDocOverlay) {
+    closeUserDocOverlay();
+  }
+}
+
+function handleGlobalKeydown(event) {
+  if (event.key !== "Escape") return;
+  if (!userDocOverlay || userDocOverlay.classList.contains("hidden")) return;
+  closeUserDocOverlay();
+}
+
+function renderUserDocOverlayLoading(row) {
+  openUserDocOverlay();
+  if (userDocOverlayMeta) {
+    const uid = String(row?.uid || "").trim() || "-";
+    const tenantId = String(row?.tenantId || "").trim() || "-";
+    userDocOverlayMeta.textContent = `UID ${uid} | Tenant ${tenantId} | Buscando en cache local...`;
+  }
+  if (userDocOverlayUserContent) userDocOverlayUserContent.textContent = "Cargando doc de usuario...";
+  if (userDocOverlayTenantContent) userDocOverlayTenantContent.textContent = "Cargando doc de tenant...";
+}
+
+function renderUserDocOverlayError(message, row) {
+  openUserDocOverlay();
+  const errorMessage = String(message || "No se pudieron cargar los documentos.");
+  if (userDocOverlayMeta) {
+    const uid = String(row?.uid || "").trim() || "-";
+    const tenantId = String(row?.tenantId || "").trim() || "-";
+    userDocOverlayMeta.textContent = `UID ${uid} | Tenant ${tenantId} | ${errorMessage}`;
+  }
+  if (userDocOverlayUserContent) {
+    userDocOverlayUserContent.textContent = JSON.stringify(
+      { error: errorMessage, doc: "usuario" },
+      null,
+      2
+    );
+  }
+  if (userDocOverlayTenantContent) {
+    userDocOverlayTenantContent.textContent = JSON.stringify(
+      { error: errorMessage, doc: "tenant" },
+      null,
+      2
+    );
+  }
+}
+
+function renderUserDocOverlayPayload(payload, row) {
+  openUserDocOverlay();
+  const uid = String(payload?.uid || row?.uid || "").trim() || "-";
+  const tenantId = String(payload?.tenantId || row?.tenantId || "").trim() || "-";
+  const sourceLabel =
+    payload?.source === "cache" ? "cache local (IndexedDB)" : "Firebase / Cloud Functions";
+  const userSource = payload?.userCollection ? String(payload.userCollection) : "-";
+  const tenantSource = payload?.tenantCollection ? String(payload.tenantCollection) : "-";
+
+  if (userDocOverlayMeta) {
+    userDocOverlayMeta.textContent = [
+      `UID ${uid}`,
+      `Tenant ${tenantId}`,
+      `Fuente ${sourceLabel}`,
+      `usuario:${userSource}`,
+      `tenant:${tenantSource}`
+    ].join(" | ");
+  }
+
+  const userDoc = isObjectRecord(payload?.userDoc)
+    ? payload.userDoc
+    : { message: "Documento de usuario no encontrado." };
+  const tenantDoc = isObjectRecord(payload?.tenantDoc)
+    ? payload.tenantDoc
+    : { message: "Documento de tenant no encontrado." };
+
+  if (userDocOverlayUserContent) {
+    userDocOverlayUserContent.textContent = JSON.stringify(serializeForDisplay(userDoc), null, 2);
+  }
+  if (userDocOverlayTenantContent) {
+    userDocOverlayTenantContent.textContent = JSON.stringify(serializeForDisplay(tenantDoc), null, 2);
+  }
+}
+
+function isObjectRecord(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function hasAnyUserTenantDocs(entry) {
+  return isObjectRecord(entry?.userDoc) || isObjectRecord(entry?.tenantDoc);
+}
+
+function hasCompleteUserTenantDocs(entry) {
+  return isObjectRecord(entry?.userDoc) && isObjectRecord(entry?.tenantDoc);
+}
+
+function isStaleUserDocRequest(requestId, uid) {
+  return requestId !== latestUserDocRequestId || selectedUserUid !== uid;
+}
+
+async function loadAndRenderSelectedUserDocs(row, detailsPromise = null) {
+  const uid = String(row?.uid || "").trim();
+  const tenantId = String(row?.tenantId || "").trim();
+  if (!uid) {
+    renderUserDocOverlayError("No se encontro el UID del usuario seleccionado.", row);
+    return;
+  }
+
+  const requestId = ++latestUserDocRequestId;
+  try {
+    const cachedEntry = await getCachedUserDocsEntry(uid, tenantId);
+    if (isStaleUserDocRequest(requestId, uid)) return;
+
+    if (hasCompleteUserTenantDocs(cachedEntry)) {
+      renderUserDocOverlayPayload({ ...cachedEntry, source: "cache" }, row);
+      return;
+    }
+
+    if (userDocOverlayMeta) {
+      userDocOverlayMeta.textContent = `UID ${uid} | Tenant ${tenantId || "-"} | Consultando Firebase...`;
+    }
+
+    let detailsPayload = null;
+    if (detailsPromise && typeof detailsPromise.then === "function") {
+      detailsPayload = await detailsPromise.catch(() => null);
+    }
+    if (isStaleUserDocRequest(requestId, uid)) return;
+
+    const remoteEntry = await fetchUserTenantDocsFromFirebase({
+      uid,
+      tenantId,
+      detailsPayload
+    });
+    if (isStaleUserDocRequest(requestId, uid)) return;
+
+    const mergedEntry = {
+      uid,
+      tenantId,
+      userDoc: remoteEntry?.userDoc || cachedEntry?.userDoc || null,
+      tenantDoc: remoteEntry?.tenantDoc || cachedEntry?.tenantDoc || null,
+      userCollection: remoteEntry?.userCollection || cachedEntry?.userCollection || "",
+      tenantCollection: remoteEntry?.tenantCollection || cachedEntry?.tenantCollection || "",
+      updatedAt: Date.now(),
+      source: "firebase"
+    };
+
+    if (!hasAnyUserTenantDocs(mergedEntry)) {
+      renderUserDocOverlayError("No se encontraron docs de usuario/tenant en Firebase.", row);
+      return;
+    }
+
+    renderUserDocOverlayPayload(mergedEntry, row);
+    await saveCachedUserDocsEntry(uid, tenantId, mergedEntry);
+  } catch (error) {
+    console.error(error);
+    if (isStaleUserDocRequest(requestId, uid)) return;
+    renderUserDocOverlayError(error.message || "No se pudo cargar el detalle del usuario.", row);
+  }
+}
+
+async function fetchUserTenantDocsFromFirebase(options = {}) {
+  const uid = String(options?.uid || "").trim();
+  const tenantId = String(options?.tenantId || "").trim();
+  const extracted = extractUserTenantDocsFromAccountPayload(options?.detailsPayload);
+
+  let userDocData = extracted.userDoc;
+  let tenantDocData = extracted.tenantDoc;
+  let userCollection = extracted.userCollection;
+  let tenantCollection = extracted.tenantCollection;
+
+  if (uid) {
+    const userDocResult = await fetchDocFromCandidateCollections(USER_COLLECTION_CANDIDATES, uid);
+    if (userDocResult) {
+      userDocData = userDocResult.data;
+      userCollection = userDocResult.collection;
+    }
+  }
+
+  if (tenantId) {
+    const tenantDocResult = await fetchDocFromCandidateCollections(TENANT_COLLECTION_CANDIDATES, tenantId);
+    if (tenantDocResult) {
+      tenantDocData = tenantDocResult.data;
+      tenantCollection = tenantDocResult.collection;
+    }
+  }
+
+  return {
+    userDoc: isObjectRecord(userDocData) ? userDocData : null,
+    tenantDoc: isObjectRecord(tenantDocData) ? tenantDocData : null,
+    userCollection: userCollection || "",
+    tenantCollection: tenantCollection || ""
+  };
+}
+
+function extractUserTenantDocsFromAccountPayload(payload) {
+  if (!isObjectRecord(payload)) {
+    return {
+      userDoc: null,
+      tenantDoc: null,
+      userCollection: "",
+      tenantCollection: ""
+    };
+  }
+
+  const userDoc = getFirstObjectCandidate([
+    payload.userDoc,
+    payload.usuarioDoc,
+    payload.user,
+    payload.usuario,
+    payload.employerDoc,
+    payload.employer,
+    payload.employerRaw,
+    payload.employer?.raw,
+    payload.docs?.user,
+    payload.docs?.usuario
+  ]);
+  const tenantDoc = getFirstObjectCandidate([
+    payload.tenantDoc,
+    payload.tenant,
+    payload.tenantRaw,
+    payload.tenant?.raw,
+    payload.businessDoc,
+    payload.business,
+    payload.negocioDoc,
+    payload.negocio,
+    payload.docs?.tenant,
+    payload.docs?.negocio
+  ]);
+
+  return {
+    userDoc,
+    tenantDoc,
+    userCollection: userDoc ? "adminManageAccounts" : "",
+    tenantCollection: tenantDoc ? "adminManageAccounts" : ""
+  };
+}
+
+function getFirstObjectCandidate(candidates) {
+  if (!Array.isArray(candidates)) return null;
+  for (const candidate of candidates) {
+    if (isObjectRecord(candidate)) return candidate;
+  }
+  return null;
+}
+
+async function fetchDocFromCandidateCollections(collectionNames, docId) {
+  const safeId = String(docId || "").trim();
+  if (!safeId || !Array.isArray(collectionNames) || !collectionNames.length) return null;
+
+  let firstError = null;
+  for (const collectionNameRaw of collectionNames) {
+    const collectionName = String(collectionNameRaw || "").trim();
+    if (!collectionName) continue;
+    try {
+      const snapshot = await getDoc(doc(firestoreDb, collectionName, safeId));
+      if (snapshot.exists()) {
+        return {
+          collection: collectionName,
+          data: snapshot.data()
+        };
+      }
+    } catch (error) {
+      if (!firstError) firstError = error;
+    }
+  }
+
+  if (firstError) {
+    console.error(`No se pudo leer ${safeId} desde las colecciones candidatas de Firestore.`, firstError);
+  }
+
+  return null;
+}
+
 async function loadSelectedUserDetails() {
-  if (!selectedUserRow || !auth.currentUser) return;
+  if (!selectedUserRow || !auth.currentUser) return null;
 
   try {
     const token = await auth.currentUser.getIdToken(true);
@@ -2280,9 +2645,11 @@ async function loadSelectedUserDetails() {
 
     selectedEmployees = Array.isArray(result?.employees) ? result.employees : [];
     renderEmployeesTable();
+    return result;
   } catch (error) {
     console.error(error);
     setEmployeesPlaceholder(error.message || "No se pudieron cargar los empleados.");
+    return null;
   }
 }
 
