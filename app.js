@@ -2622,10 +2622,24 @@ function extractUserTenantDocsFromAccountPayload(payload, options = {}) {
   ]);
 
   if (!isObjectRecord(userDoc) && uid) {
-    userDoc = findObjectByIdInPayload(payload, uid, ["uid", "userId", "id"]);
+    userDoc = findObjectByIdInPayload(payload, uid, ["uid", "userId", "id"], {
+      entityType: "user",
+      selectedUid: uid,
+      selectedTenantId: tenantId
+    });
   }
   if (!isObjectRecord(tenantDoc) && tenantId) {
-    tenantDoc = findObjectByIdInPayload(payload, tenantId, ["tenantId", "id"]);
+    tenantDoc =
+      findObjectByIdInPayload(payload, tenantId, ["id"], {
+        entityType: "tenant",
+        selectedUid: uid,
+        selectedTenantId: tenantId
+      }) ||
+      findObjectByIdInPayload(payload, tenantId, ["tenantId"], {
+        entityType: "tenant",
+        selectedUid: uid,
+        selectedTenantId: tenantId
+      });
   }
 
   return {
@@ -2644,7 +2658,7 @@ function getFirstObjectCandidate(candidates) {
   return null;
 }
 
-function findObjectByIdInPayload(root, idValue, fields = []) {
+function findObjectByIdInPayload(root, idValue, fields = [], options = {}) {
   const safeId = String(idValue || "").trim();
   if (!safeId || !root || typeof root !== "object") return null;
 
@@ -2661,7 +2675,7 @@ function findObjectByIdInPayload(root, idValue, fields = []) {
       continue;
     }
 
-    if (isLikelyEntityDoc(current, safeId, fields)) {
+    if (isLikelyEntityDoc(current, safeId, fields, options)) {
       return current;
     }
 
@@ -2674,20 +2688,41 @@ function findObjectByIdInPayload(root, idValue, fields = []) {
   return null;
 }
 
-function isLikelyEntityDoc(candidate, idValue, fields) {
+function isLikelyEntityDoc(candidate, idValue, fields, options = {}) {
   if (!isObjectRecord(candidate)) return false;
   const keyCount = Object.keys(candidate).length;
   if (keyCount < 2) return false;
 
   const fieldList = Array.isArray(fields) ? fields : [];
+  let matchedField = "";
   for (const field of fieldList) {
     const fieldName = String(field || "").trim();
     if (!fieldName) continue;
     if (String(candidate?.[fieldName] || "").trim() === idValue) {
-      return true;
+      matchedField = fieldName;
+      break;
     }
   }
-  return false;
+  if (!matchedField) return false;
+
+  const entityType = String(options?.entityType || "").trim().toLowerCase();
+  if (entityType === "tenant") {
+    const candidateUid = String(candidate?.uid || candidate?.userId || "").trim();
+    if (matchedField === "tenantId" && candidateUid) {
+      return false;
+    }
+    const selectedUid = String(options?.selectedUid || "").trim();
+    if (selectedUid && candidateUid === selectedUid) {
+      return false;
+    }
+  }
+
+  if (entityType === "user") {
+    const userUid = String(candidate?.uid || candidate?.userId || "").trim();
+    if (!userUid) return false;
+  }
+
+  return true;
 }
 
 async function loadSelectedUserDetails() {
