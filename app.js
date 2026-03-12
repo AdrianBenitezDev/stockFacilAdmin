@@ -65,6 +65,7 @@ const userDocOverlay = document.getElementById("admin-user-doc-overlay");
 const userDocOverlayMeta = document.getElementById("admin-user-doc-overlay-meta");
 const userDocOverlayUserContent = document.getElementById("admin-user-doc-overlay-user-content");
 const userDocOverlayTenantContent = document.getElementById("admin-user-doc-overlay-tenant-content");
+const userDocOverlayRefreshBtn = document.getElementById("admin-user-doc-overlay-refresh-btn");
 const userDocOverlayCloseBtn = document.getElementById("admin-user-doc-overlay-close-btn");
 const metricTotalUsers = document.getElementById("metric-total-users");
 const metricTotalEmployees = document.getElementById("metric-total-employees");
@@ -191,6 +192,7 @@ async function init() {
   backupDownloadBtn?.addEventListener("click", handleBackupDownloadClick);
   tableBody?.addEventListener("click", handleUserRowClick);
   userDocOverlay?.addEventListener("click", handleUserDocOverlayClick);
+  userDocOverlayRefreshBtn?.addEventListener("click", handleUserDocOverlayRefreshClick);
   userDocOverlayCloseBtn?.addEventListener("click", closeUserDocOverlay);
   userDocOverlayUserContent?.addEventListener("click", handleUserDocCardRowCopyClick);
   userDocOverlayTenantContent?.addEventListener("click", handleUserDocCardRowCopyClick);
@@ -2460,6 +2462,36 @@ function handleUserDocOverlayClick(event) {
   }
 }
 
+async function handleUserDocOverlayRefreshClick() {
+  if (!selectedUserRow) {
+    showGlobalToast("Selecciona un usuario primero.", "warning");
+    return;
+  }
+
+  const targetRow = selectedUserRow;
+  if (userDocOverlayRefreshBtn) {
+    userDocOverlayRefreshBtn.disabled = true;
+    userDocOverlayRefreshBtn.textContent = "Actualizando...";
+  }
+
+  renderUserDocOverlayLoading(targetRow);
+  try {
+    await loadAndRenderSelectedUserDocs(
+      targetRow,
+      () => loadSelectedUserAccountDetails(),
+      { forceRemote: true }
+    );
+    if (selectedUserUid === String(targetRow?.uid || "").trim()) {
+      showGlobalToast("Datos actualizados en IndexedDB.");
+    }
+  } finally {
+    if (userDocOverlayRefreshBtn) {
+      userDocOverlayRefreshBtn.disabled = false;
+      userDocOverlayRefreshBtn.textContent = "Refrescar docs";
+    }
+  }
+}
+
 function handleGlobalKeydown(event) {
   if (event.key !== "Escape") return;
   if (!userDocOverlay || userDocOverlay.classList.contains("hidden")) return;
@@ -2656,26 +2688,29 @@ function isStaleUserDocRequest(requestId, uid) {
   return requestId !== latestUserDocRequestId || selectedUserUid !== uid;
 }
 
-async function loadAndRenderSelectedUserDocs(row, detailsLoader = null) {
+async function loadAndRenderSelectedUserDocs(row, detailsLoader = null, options = {}) {
   const uid = String(row?.uid || "").trim();
   const tenantId = String(row?.tenantId || "").trim();
+  const forceRemote = options?.forceRemote === true;
   if (!uid) {
     renderUserDocOverlayError("No se encontro el UID del usuario seleccionado.", row);
     return;
   }
 
   const requestId = ++latestUserDocRequestId;
+  let cachedEntry = null;
   try {
-    const cachedEntry = await getCachedUserDocsEntry(uid, tenantId);
+    cachedEntry = await getCachedUserDocsEntry(uid, tenantId);
     if (isStaleUserDocRequest(requestId, uid)) return;
 
-    if (hasCompleteUserTenantDocs(cachedEntry)) {
+    if (!forceRemote && hasCompleteUserTenantDocs(cachedEntry)) {
       renderUserDocOverlayPayload({ ...cachedEntry, source: "cache" }, row);
       return;
     }
 
     if (userDocOverlayMeta) {
-      userDocOverlayMeta.textContent = `UID ${uid} | Tenant ${tenantId || "-"} | Consultando Firebase...`;
+      const sourceText = forceRemote ? "Actualizando desde Firebase..." : "Consultando Firebase...";
+      userDocOverlayMeta.textContent = `UID ${uid} | Tenant ${tenantId || "-"} | ${sourceText}`;
     }
 
     let detailsPayload = null;
@@ -2722,6 +2757,11 @@ async function loadAndRenderSelectedUserDocs(row, detailsLoader = null) {
   } catch (error) {
     console.error(error);
     if (isStaleUserDocRequest(requestId, uid)) return;
+    if (forceRemote && hasAnyUserTenantDocs(cachedEntry)) {
+      renderUserDocOverlayPayload({ ...cachedEntry, source: "cache" }, row);
+      showGlobalToast("No se pudo actualizar. Se muestran datos en cache.", "warning");
+      return;
+    }
     renderUserDocOverlayError(error.message || "No se pudo cargar el detalle del usuario.", row);
   }
 }

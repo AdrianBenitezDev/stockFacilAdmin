@@ -104,7 +104,14 @@ body {
   margin: 0;
 }
 
-.user-doc-modal-header button {
+.user-doc-modal-header-actions {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.user-doc-modal-header-actions button {
   margin-top: 0;
 }
 
