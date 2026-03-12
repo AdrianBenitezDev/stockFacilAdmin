@@ -2561,7 +2561,12 @@ async function loadAndRenderSelectedUserDocs(row, detailsPromise = null) {
 }
 
 async function fetchUserTenantDocsFromFirebase(options = {}) {
-  const extracted = extractUserTenantDocsFromAccountPayload(options?.detailsPayload);
+  const uid = String(options?.uid || "").trim();
+  const tenantId = String(options?.tenantId || "").trim();
+  const extracted = extractUserTenantDocsFromAccountPayload(options?.detailsPayload, {
+    uid,
+    tenantId
+  });
 
   return {
     userDoc: isObjectRecord(extracted?.userDoc) ? extracted.userDoc : null,
@@ -2571,7 +2576,7 @@ async function fetchUserTenantDocsFromFirebase(options = {}) {
   };
 }
 
-function extractUserTenantDocsFromAccountPayload(payload) {
+function extractUserTenantDocsFromAccountPayload(payload, options = {}) {
   if (!isObjectRecord(payload)) {
     return {
       userDoc: null,
@@ -2581,7 +2586,10 @@ function extractUserTenantDocsFromAccountPayload(payload) {
     };
   }
 
-  const userDoc = getFirstObjectCandidate([
+  const uid = String(options?.uid || "").trim();
+  const tenantId = String(options?.tenantId || "").trim();
+
+  let userDoc = getFirstObjectCandidate([
     payload.userDoc,
     payload.usuarioDoc,
     payload.user,
@@ -2593,7 +2601,7 @@ function extractUserTenantDocsFromAccountPayload(payload) {
     payload.docs?.user,
     payload.docs?.usuario
   ]);
-  const tenantDoc = getFirstObjectCandidate([
+  let tenantDoc = getFirstObjectCandidate([
     payload.tenantDoc,
     payload.tenant,
     payload.tenantData,
@@ -2613,6 +2621,13 @@ function extractUserTenantDocsFromAccountPayload(payload) {
     payload.docs?.negocio
   ]);
 
+  if (!isObjectRecord(userDoc) && uid) {
+    userDoc = findObjectByIdInPayload(payload, uid, ["uid", "userId", "id"]);
+  }
+  if (!isObjectRecord(tenantDoc) && tenantId) {
+    tenantDoc = findObjectByIdInPayload(payload, tenantId, ["tenantId", "id"]);
+  }
+
   return {
     userDoc,
     tenantDoc,
@@ -2627,6 +2642,52 @@ function getFirstObjectCandidate(candidates) {
     if (isObjectRecord(candidate)) return candidate;
   }
   return null;
+}
+
+function findObjectByIdInPayload(root, idValue, fields = []) {
+  const safeId = String(idValue || "").trim();
+  if (!safeId || !root || typeof root !== "object") return null;
+
+  const queue = [root];
+  const seen = new WeakSet();
+  while (queue.length) {
+    const current = queue.shift();
+    if (!current || typeof current !== "object") continue;
+    if (seen.has(current)) continue;
+    seen.add(current);
+
+    if (Array.isArray(current)) {
+      current.forEach((entry) => queue.push(entry));
+      continue;
+    }
+
+    if (isLikelyEntityDoc(current, safeId, fields)) {
+      return current;
+    }
+
+    Object.values(current).forEach((entry) => {
+      if (entry && typeof entry === "object") {
+        queue.push(entry);
+      }
+    });
+  }
+  return null;
+}
+
+function isLikelyEntityDoc(candidate, idValue, fields) {
+  if (!isObjectRecord(candidate)) return false;
+  const keyCount = Object.keys(candidate).length;
+  if (keyCount < 2) return false;
+
+  const fieldList = Array.isArray(fields) ? fields : [];
+  for (const field of fieldList) {
+    const fieldName = String(field || "").trim();
+    if (!fieldName) continue;
+    if (String(candidate?.[fieldName] || "").trim() === idValue) {
+      return true;
+    }
+  }
+  return false;
 }
 
 async function loadSelectedUserDetails() {
