@@ -336,6 +336,11 @@ button:hover {
 #admin-sales-search,
 #admin-cashboxes-user-select,
 #admin-cashboxes-search,
+#admin-backups-user-select,
+#admin-backups-search,
+#admin-import-target-user-select,
+#admin-import-backup-type,
+#admin-import-backup-file,
 .plan-editor input,
 .plan-editor textarea {
   border: 1px solid #cbd5e1;
@@ -353,6 +358,11 @@ button:hover {
 #admin-sales-search:focus,
 #admin-cashboxes-user-select:focus,
 #admin-cashboxes-search:focus,
+#admin-backups-user-select:focus,
+#admin-backups-search:focus,
+#admin-import-target-user-select:focus,
+#admin-import-backup-type:focus,
+#admin-import-backup-file:focus,
 .plan-editor input:focus,
 .plan-editor textarea:focus {
   outline: 2px solid #99f6e4;
@@ -374,6 +384,36 @@ button:hover {
 .backup-btn {
   margin-top: 0;
   margin-bottom: 0.75rem;
+}
+
+.import-floating-actions {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 140;
+  display: flex;
+  gap: 0.55rem;
+  background: rgba(15, 23, 42, 0.92);
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: 0.55rem;
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.35);
+}
+
+.import-floating-actions button {
+  margin-top: 0;
+}
+
+.import-floating-actions #admin-import-confirm-btn {
+  background: #0f766e;
+}
+
+.import-floating-actions #admin-import-cancel-btn {
+  background: #475569;
+}
+
+.import-floating-actions.hidden {
+  display: none !important;
 }
 
 table {
@@ -591,5 +631,12 @@ thead th {
     right: 0.65rem;
     bottom: 0.65rem;
     max-width: calc(100vw - 1.3rem);
+  }
+
+  .import-floating-actions {
+    left: 0.65rem;
+    right: 0.65rem;
+    bottom: 0.65rem;
+    justify-content: space-between;
   }
 }

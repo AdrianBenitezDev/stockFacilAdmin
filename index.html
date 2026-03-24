@@ -422,11 +422,63 @@
             </table>
           </div>
         </section>
+
+        <section id="admin-backup-import-panel" class="cashbox-detail-panel">
+          <h3>Cargar backup en otro usuario</h3>
+          <p class="subtitle">Selecciona usuario destino, tipo de datos y archivo para simular la carga.</p>
+          <p id="admin-import-backup-feedback" class="feedback" aria-live="polite"></p>
+
+          <div class="products-filters">
+            <div class="products-filter-group">
+              <label for="admin-import-target-user-select" class="users-filters-label">Usuario destino</label>
+              <select id="admin-import-target-user-select">
+                <option value="">Selecciona un usuario...</option>
+              </select>
+            </div>
+
+            <div class="products-filter-group">
+              <label for="admin-import-backup-file" class="users-filters-label">Archivo backup (.json)</label>
+              <input id="admin-import-backup-file" type="file" accept="application/json,.json">
+            </div>
+
+            <div class="products-filter-group">
+              <label for="admin-import-backup-type" class="users-filters-label">Tipo a cargar</label>
+              <select id="admin-import-backup-type">
+                <option value="sales">Ventas</option>
+                <option value="cashboxes">Cajas</option>
+                <option value="products">Productos</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>ID</th>
+                  <th>Tenant</th>
+                  <th>Resumen</th>
+                </tr>
+              </thead>
+              <tbody id="admin-import-preview-table-body">
+                <tr>
+                  <td colspan="4">Selecciona un archivo para simular la carga.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
       </section>
 
 
     </section>
   </main>
+
+  <div id="admin-import-floating-actions" class="import-floating-actions hidden">
+    <button id="admin-import-confirm-btn" type="button" class="mode-btn-secondary" disabled>Cargar</button>
+    <button id="admin-import-cancel-btn" type="button" class="mode-btn-secondary">Cancelar</button>
+  </div>
 
   <script type="module" src="app.js"></script>
 </body>

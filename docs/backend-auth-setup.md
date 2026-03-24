@@ -37,4 +37,5 @@ Si el backend vive en otro repositorio (por ejemplo `functions/` separado), copi
 - `adminManageBackups`
 - `adminReadBackup`
 - `adminGetBackupDownloadUrl`
+- `adminImportBackup`
 - `adminGetTenantById`

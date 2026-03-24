@@ -110,6 +110,14 @@ const backupsTableBody = document.getElementById("admin-backups-table-body");
 const backupSalesFeedbackNode = document.getElementById("admin-backup-sales-feedback");
 const backupSalesTableBody = document.getElementById("admin-backup-sales-table-body");
 const backupDownloadBtn = document.getElementById("admin-backup-download-btn");
+const importBackupFeedbackNode = document.getElementById("admin-import-backup-feedback");
+const importTargetUserSelect = document.getElementById("admin-import-target-user-select");
+const importBackupFileInput = document.getElementById("admin-import-backup-file");
+const importBackupTypeSelect = document.getElementById("admin-import-backup-type");
+const importPreviewTableBody = document.getElementById("admin-import-preview-table-body");
+const importFloatingActionsNode = document.getElementById("admin-import-floating-actions");
+const importConfirmBtn = document.getElementById("admin-import-confirm-btn");
+const importCancelBtn = document.getElementById("admin-import-cancel-btn");
 
 let allUserRows = [];
 let allPlans = [];
@@ -147,6 +155,11 @@ let backupsSearchDebounce = null;
 let latestBackupsRequestId = 0;
 let selectedBackupRowPath = "";
 let selectedBackupRow = null;
+let selectedImportTargetUserUid = "";
+let selectedImportTargetTenantId = "";
+let selectedImportBackupType = "sales";
+let importPreviewPayload = null;
+let importPreviewRows = [];
 let pendingGlobalLoads = 0;
 let globalToastTimeout = null;
 
@@ -190,6 +203,11 @@ async function init() {
   backupsSearchInput?.addEventListener("input", handleBackupsSearchInput);
   backupsTableBody?.addEventListener("click", handleBackupRowClick);
   backupDownloadBtn?.addEventListener("click", handleBackupDownloadClick);
+  importTargetUserSelect?.addEventListener("change", handleImportTargetUserSelectChange);
+  importBackupTypeSelect?.addEventListener("change", handleImportBackupTypeSelectChange);
+  importBackupFileInput?.addEventListener("change", () => void handleImportBackupFileInputChange());
+  importConfirmBtn?.addEventListener("click", () => void handleImportConfirmClick());
+  importCancelBtn?.addEventListener("click", handleImportCancelClick);
   tableBody?.addEventListener("click", handleUserRowClick);
   userDocOverlay?.addEventListener("click", handleUserDocOverlayClick);
   userDocOverlayRefreshBtn?.addEventListener("click", handleUserDocOverlayRefreshClick);
@@ -458,6 +476,11 @@ function getAdminBackupDownloadUrlEndpoint() {
   return `https://us-central1-${projectId}.cloudfunctions.net/adminGetBackupDownloadUrl`;
 }
 
+function getAdminImportBackupEndpoint() {
+  const projectId = String(firebaseConfig?.projectId || "").trim();
+  return `https://us-central1-${projectId}.cloudfunctions.net/adminImportBackup`;
+}
+
 function getActiveScopedUsers() {
   return allUserRows
     .filter((row) => row?.activo !== false && String(row?.tenantId || "").trim())
@@ -641,15 +664,21 @@ function renderBackupsUserOptions() {
       )
       .join("");
   backupsUserSelect.disabled = activeUsers.length === 0;
+  renderImportTargetUserOptions(activeUsers);
 
   if (!activeUsers.length) {
     allBackupsRows = [];
     selectedBackupRowPath = "";
     selectedBackupRow = null;
+    importPreviewPayload = null;
+    importPreviewRows = [];
+    if (importBackupFileInput) importBackupFileInput.value = "";
     setBackupsPlaceholder("No hay usuarios activos para consultar backups.");
     setBackupsFeedback("");
     renderBackupSalesTable([]);
     setBackupSalesFeedback("Selecciona un backup para ver sus ventas.");
+    setImportPreviewPlaceholder("Selecciona un archivo para simular la carga.");
+    setImportBackupFeedback("Selecciona usuario destino, tipo y archivo para simular.");
     syncBackupButtonsState();
     return;
   }
@@ -657,6 +686,37 @@ function renderBackupsUserOptions() {
   syncBackupButtonsState();
   if (activeSection === "backups") {
     void loadBackupsForSelectedUser();
+  }
+}
+
+function renderImportTargetUserOptions(activeUsers) {
+  if (!importTargetUserSelect) return;
+  const list = Array.isArray(activeUsers) ? activeUsers : [];
+  const previousUid = selectedImportTargetUserUid;
+  const nextUid =
+    previousUid && list.some((item) => item.uid === previousUid)
+      ? previousUid
+      : list[0]?.uid || "";
+  const selectedUser = list.find((item) => item.uid === nextUid) || null;
+
+  selectedImportTargetUserUid = nextUid;
+  selectedImportTargetTenantId = selectedUser?.tenantId || "";
+  importTargetUserSelect.innerHTML =
+    `<option value="">Selecciona un usuario...</option>` +
+    list
+      .map(
+        (item) =>
+          `<option value="${escapeHtml(item.uid)}"${item.uid === selectedImportTargetUserUid ? " selected" : ""}>${escapeHtml(item.label)}</option>`
+      )
+      .join("");
+  importTargetUserSelect.disabled = list.length === 0;
+  if (importBackupTypeSelect) {
+    importBackupTypeSelect.disabled = list.length === 0;
+    if (!importBackupTypeSelect.value) {
+      importBackupTypeSelect.value = selectedImportBackupType || "sales";
+    }
+    selectedImportBackupType =
+      normalizeBackupType(importBackupTypeSelect.value || selectedImportBackupType || "sales") || "sales";
   }
 }
 
@@ -993,6 +1053,319 @@ function handleBackupsSearchInput() {
   backupsSearchDebounce = setTimeout(() => {
     void loadBackupsForSelectedUser();
   }, 300);
+}
+
+function handleImportTargetUserSelectChange() {
+  const uid = String(importTargetUserSelect?.value || "").trim();
+  const row = getActiveScopedUsers().find((entry) => String(entry?.uid || "").trim() === uid) || null;
+  selectedImportTargetUserUid = uid;
+  selectedImportTargetTenantId = String(row?.tenantId || "").trim();
+  syncBackupButtonsState();
+}
+
+function handleImportBackupTypeSelectChange() {
+  selectedImportBackupType = normalizeBackupType(importBackupTypeSelect?.value || "sales") || "sales";
+  if (importPreviewRows.length) {
+    renderImportPreviewTable(importPreviewRows);
+  }
+  syncBackupButtonsState();
+}
+
+function getSelectedImportBackupFile() {
+  return importBackupFileInput?.files?.[0] || null;
+}
+
+async function handleImportBackupFileInputChange() {
+  const file = getSelectedImportBackupFile();
+  if (!file) {
+    clearImportPreviewState({ keepFeedback: true, keepFileInput: true });
+    setImportBackupFeedback("Selecciona un archivo backup .json para simular la carga.");
+    syncBackupButtonsState();
+    return;
+  }
+
+  setImportBackupFeedback("Leyendo archivo backup para simulacion...");
+  try {
+    const backupPayload = await readJsonFile(file);
+    const rows = extractBackupRows(backupPayload);
+    if (!rows.length) {
+      throw new Error("El backup no contiene elementos para mostrar en la simulacion.");
+    }
+    importPreviewPayload = backupPayload;
+    importPreviewRows = rows;
+    renderImportPreviewTable(rows);
+    const maxPreviewRows = Math.min(rows.length, 300);
+    const truncationText =
+      rows.length > maxPreviewRows ? ` Mostrando ${maxPreviewRows} de ${rows.length} elementos.` : "";
+    setImportBackupFeedback(`Simulacion lista para ${rows.length} elemento(s).${truncationText}`);
+  } catch (error) {
+    console.error(error);
+    clearImportPreviewState({ keepFeedback: true, keepFileInput: true });
+    setImportBackupFeedback(error.message || "No se pudo generar la simulacion del backup.");
+  }
+  syncBackupButtonsState();
+}
+
+async function handleImportConfirmClick() {
+  await handleImportBackupByType(selectedImportBackupType || "sales");
+}
+
+function handleImportCancelClick() {
+  clearImportPreviewState();
+  setImportBackupFeedback("Carga cancelada.");
+  showGlobalToast("Carga cancelada.", "warning");
+}
+
+async function handleImportBackupByType(backupType) {
+  if (!auth.currentUser) return;
+  if (!selectedImportTargetTenantId) {
+    setImportBackupFeedback("Selecciona un usuario destino para cargar el backup.");
+    return;
+  }
+  const normalizedType = normalizeBackupType(backupType || importBackupTypeSelect?.value || "sales");
+  if (!normalizedType) {
+    setImportBackupFeedback("Selecciona el tipo de datos a cargar.");
+    return;
+  }
+  if (!importPreviewPayload || !importPreviewRows.length) {
+    setImportBackupFeedback("Primero simula el backup cargando un archivo .json.");
+    return;
+  }
+
+  const file = getSelectedImportBackupFile();
+  setImportBackupFeedback("Cargando datos en el usuario destino...");
+  try {
+    const token = await auth.currentUser.getIdToken(true);
+    const response = await fetchWithLoading(getAdminImportBackupEndpoint(), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        backupType: normalizedType,
+        targetTenantId: selectedImportTargetTenantId,
+        targetUserUid: selectedImportTargetUserUid,
+        fileName: String(file?.name || ""),
+        backupPayload: importPreviewPayload
+      })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      throw new Error(result?.error || "No se pudo importar el backup.");
+    }
+
+    const imported = Number(result?.imported || 0);
+    const resolvedType = String(result?.backupType || normalizedType || "").trim();
+    const collectionName = String(result?.collection || "").trim();
+    const message = [
+      `Importacion completada.`,
+      `${imported} registro(s) cargado(s).`,
+      collectionName ? `Coleccion: ${collectionName}.` : "",
+      resolvedType ? `Tipo: ${resolvedType}.` : ""
+    ]
+      .filter(Boolean)
+      .join(" ");
+    setImportBackupFeedback(message);
+    showGlobalToast(`${imported} registro(s) importado(s).`);
+    clearImportPreviewState({ keepFeedback: true, keepFileInput: false });
+    void refreshImportedSectionData(resolvedType, selectedImportTargetTenantId);
+  } catch (error) {
+    console.error(error);
+    setImportBackupFeedback(error.message || "No se pudo importar el backup.");
+    showGlobalToast(error.message || "No se pudo importar el backup.", "error");
+  }
+}
+
+function clearImportPreviewState(options = {}) {
+  importPreviewPayload = null;
+  importPreviewRows = [];
+  if (!options.keepFileInput && importBackupFileInput) {
+    importBackupFileInput.value = "";
+  }
+  setImportPreviewPlaceholder("Selecciona un archivo para simular la carga.");
+  if (!options.keepFeedback) {
+    setImportBackupFeedback("");
+  }
+  syncBackupButtonsState();
+}
+
+function renderImportPreviewTable(rows) {
+  if (!importPreviewTableBody) return;
+  const list = Array.isArray(rows) ? rows : [];
+  if (!list.length) {
+    setImportPreviewPlaceholder("Sin elementos para mostrar.");
+    return;
+  }
+
+  const maxRows = 300;
+  const visibleRows = list.slice(0, maxRows);
+  importPreviewTableBody.innerHTML = visibleRows
+    .map((row, index) => {
+      const source = resolveImportPreviewSourceRow(row);
+      const id = resolveImportPreviewId(source);
+      const tenant = resolveImportPreviewTenant(source);
+      const summary = summarizeImportPreviewRow(source, selectedImportBackupType);
+      return [
+        "<tr>",
+        `<td>${index + 1}</td>`,
+        `<td>${escapeHtml(id)}</td>`,
+        `<td>${escapeHtml(tenant)}</td>`,
+        `<td>${escapeHtml(summary)}</td>`,
+        "</tr>"
+      ].join("");
+    })
+    .join("");
+}
+
+function resolveImportPreviewSourceRow(row) {
+  if (isObjectRecord(row?.raw)) return row.raw;
+  return row;
+}
+
+function resolveImportPreviewId(row) {
+  if (!isObjectRecord(row)) return "-";
+  const candidates = [
+    row.id,
+    row.ventaId,
+    row.saleId,
+    row.cajaId,
+    row.cashboxId,
+    row.codigo,
+    row.barcode,
+    row.docId,
+    row.uid
+  ];
+  for (const candidate of candidates) {
+    const text = String(candidate || "").trim();
+    if (text && text !== "-") return text;
+  }
+  return "-";
+}
+
+function resolveImportPreviewTenant(row) {
+  if (!isObjectRecord(row)) return "-";
+  const candidates = [row.tenantId, row.tenant_id, row.idTenant, row.tenant];
+  for (const candidate of candidates) {
+    const text = String(candidate || "").trim();
+    if (text && text !== "-") return text;
+  }
+  return "-";
+}
+
+function summarizeImportPreviewRow(row, backupType) {
+  if (!isObjectRecord(row)) {
+    return String(row ?? "-").slice(0, 180);
+  }
+
+  const type = normalizeBackupType(backupType);
+  if (type === "products") {
+    const name = String(row?.nombre || row?.name || "-").trim();
+    const category = String(row?.categoria || row?.category || "-").trim();
+    const stock = Number(row?.stock ?? 0);
+    return `${name} | cat: ${category} | stock: ${Number.isFinite(stock) ? stock : 0}`.slice(0, 180);
+  }
+  if (type === "sales") {
+    const date = formatDate(row?.fecha || row?.createdAt || row?.timestamp || "");
+    const payment = String(row?.metodoPago || row?.paymentMethod || "-").trim();
+    const total = Number(row?.total ?? row?.importeTotal ?? row?.amount ?? 0);
+    return `${date} | pago: ${payment} | total: ${formatMoney(Number.isFinite(total) ? total : 0)}`.slice(
+      0,
+      180
+    );
+  }
+  if (type === "cashboxes") {
+    const status = String(row?.estado || row?.status || "-").trim();
+    const owner = String(row?.responsable || row?.employeeName || row?.owner || "-").trim();
+    const balance = Number(row?.saldoFinal ?? row?.balance ?? row?.finalBalance ?? 0);
+    return `${status} | resp: ${owner} | saldo: ${formatMoney(Number.isFinite(balance) ? balance : 0)}`.slice(
+      0,
+      180
+    );
+  }
+
+  const keys = Object.keys(row).slice(0, 3);
+  const summary = keys
+    .map((key) => {
+      const value = row[key];
+      if (value === null || value === undefined) return `${key}: -`;
+      if (typeof value === "object") return `${key}: [obj]`;
+      return `${key}: ${String(value)}`;
+    })
+    .join(" | ");
+  return summary.slice(0, 180) || "-";
+}
+
+async function refreshImportedSectionData(backupType, tenantId) {
+  const normalizedType = normalizeBackupType(backupType);
+  if (!normalizedType || !tenantId) return;
+
+  if (normalizedType === "products" && selectedProductsTenantId === tenantId) {
+    await loadProductsForSelectedUser();
+    return;
+  }
+  if (normalizedType === "sales" && selectedSalesTenantId === tenantId) {
+    await loadSalesForSelectedUser();
+    return;
+  }
+  if (normalizedType === "cashboxes" && selectedCashboxesTenantId === tenantId) {
+    await loadCashboxesForSelectedUser({ forceRemote: true });
+    return;
+  }
+}
+
+function normalizeBackupType(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (!normalized) return "";
+  if (normalized === "productos" || normalized === "producto" || normalized === "products") {
+    return "products";
+  }
+  if (normalized === "ventas" || normalized === "venta" || normalized === "sales") {
+    return "sales";
+  }
+  if (
+    normalized === "cajas" ||
+    normalized === "caja" ||
+    normalized === "cashboxes" ||
+    normalized === "cashbox"
+  ) {
+    return "cashboxes";
+  }
+  return normalized;
+}
+
+function extractBackupRows(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== "object") return [];
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.rows)) return payload.rows;
+  if (Array.isArray(payload?.items)) return payload.items;
+  return [];
+}
+
+function readJsonFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      reject(new Error("No se encontro archivo de backup."));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const content = String(reader.result || "").trim();
+        if (!content) {
+          reject(new Error("El archivo backup esta vacio."));
+          return;
+        }
+        const parsed = JSON.parse(content);
+        resolve(parsed);
+      } catch (error) {
+        reject(new Error("El archivo no tiene formato JSON valido."));
+      }
+    };
+    reader.onerror = () => reject(new Error("No se pudo leer el archivo backup."));
+    reader.readAsText(file, "utf-8");
+  });
 }
 
 async function loadCashboxesForSelectedUser(options = {}) {
@@ -1891,6 +2264,11 @@ function showLoggedOutState() {
   latestBackupsRequestId = 0;
   selectedBackupRowPath = "";
   selectedBackupRow = null;
+  selectedImportTargetUserUid = "";
+  selectedImportTargetTenantId = "";
+  selectedImportBackupType = "sales";
+  importPreviewPayload = null;
+  importPreviewRows = [];
   if (productsSearchDebounce) {
     clearTimeout(productsSearchDebounce);
     productsSearchDebounce = null;
@@ -1931,10 +2309,21 @@ function showLoggedOutState() {
     backupsUserSelect.innerHTML = '<option value="">Selecciona un usuario...</option>';
     backupsUserSelect.disabled = true;
   }
+  if (importTargetUserSelect) {
+    importTargetUserSelect.innerHTML = '<option value="">Selecciona un usuario...</option>';
+    importTargetUserSelect.disabled = true;
+  }
+  if (importBackupTypeSelect) {
+    importBackupTypeSelect.value = "sales";
+    importBackupTypeSelect.disabled = true;
+  }
   if (productsSearchInput) productsSearchInput.value = "";
   if (salesSearchInput) salesSearchInput.value = "";
   if (cashboxesSearchInput) cashboxesSearchInput.value = "";
   if (backupsSearchInput) backupsSearchInput.value = "";
+  if (importBackupFileInput) {
+    importBackupFileInput.value = "";
+  }
   syncBackupButtonsState();
   setProductsPlaceholder("Selecciona un usuario activo para ver productos.");
   setProductsFeedback("");
@@ -1946,6 +2335,8 @@ function showLoggedOutState() {
   setBackupsPlaceholder("Selecciona un usuario activo para ver backups.");
   setBackupsFeedback("");
   setBackupSalesFeedback("Selecciona un backup para ver sus ventas.");
+  setImportBackupFeedback("Selecciona usuario destino, tipo y archivo para simular.");
+  setImportPreviewPlaceholder("Selecciona un archivo para simular la carga.");
   renderBackupSalesTable([]);
   planForm?.classList.add("hidden");
   userActionsPanel?.classList.add("hidden");
@@ -2016,6 +2407,7 @@ function setActiveSection(sectionId) {
   if (activeSection === "backups" && selectedBackupsTenantId) {
     void loadBackupsForSelectedUser();
   }
+  syncBackupButtonsState();
 }
 
 function openAdminCacheDb() {
@@ -2205,12 +2597,34 @@ function setBackupSalesFeedback(message) {
   backupSalesFeedbackNode.textContent = String(message || "");
 }
 
+function setImportBackupFeedback(message) {
+  if (!importBackupFeedbackNode) return;
+  importBackupFeedbackNode.textContent = String(message || "");
+}
+
+function setImportPreviewPlaceholder(message) {
+  if (!importPreviewTableBody) return;
+  importPreviewTableBody.innerHTML = `<tr><td colspan="4">${escapeHtml(String(message || "Sin datos."))}</td></tr>`;
+}
+
 function syncBackupButtonsState() {
   if (productsBackupBtn) productsBackupBtn.disabled = !selectedProductsTenantId;
   if (salesBackupBtn) salesBackupBtn.disabled = !selectedSalesTenantId;
   if (cashboxesBackupBtn) cashboxesBackupBtn.disabled = !selectedCashboxesTenantId;
   if (backupDownloadBtn) {
     backupDownloadBtn.disabled = !selectedBackupsTenantId || !selectedBackupRowPath;
+  }
+  const canImportBackup =
+    Boolean(selectedImportTargetTenantId) &&
+    Boolean(selectedImportBackupType) &&
+    Boolean(importPreviewPayload) &&
+    importPreviewRows.length > 0;
+  if (importConfirmBtn) importConfirmBtn.disabled = !canImportBackup;
+  if (importCancelBtn) {
+    importCancelBtn.disabled = !Boolean(getSelectedImportBackupFile()) && importPreviewRows.length === 0;
+  }
+  if (importFloatingActionsNode) {
+    importFloatingActionsNode.classList.toggle("hidden", activeSection !== "backups");
   }
 }
 
