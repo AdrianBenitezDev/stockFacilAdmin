@@ -7,11 +7,15 @@
     "ignore": [
       "firebase.json",
       ".firebaserc",
-      "**/.*",
+      ".git",
+      ".git/**",
+      ".firebase",
+      ".firebase/**",
+      "**/.*/**",
       "**/node_modules/**",
       "functions/**",
-      "docs/**"
+      "docs/**",
+      "firebase-debug.log"
     ]
   }
 }
-
