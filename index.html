@@ -207,6 +207,41 @@
             Plan activo
           </label>
 
+          <fieldset id="admin-trial-control-group" class="trial-control-group hidden">
+            <legend>Control trial (solo plan prueba)</legend>
+
+            <label class="checkbox-field" for="admin-plan-trial-access-allowed">
+              <input id="admin-plan-trial-access-allowed" type="checkbox" checked>
+              Permitir acceso a cuentas en prueba
+            </label>
+
+            <label class="checkbox-field" for="admin-plan-trial-warning-enabled">
+              <input id="admin-plan-trial-warning-enabled" type="checkbox">
+              Mostrar banner de advertencia
+            </label>
+
+            <label for="admin-plan-trial-warning-text">Texto banner warning</label>
+            <textarea id="admin-plan-trial-warning-text" rows="3" maxlength="220"></textarea>
+
+            <label for="admin-plan-trial-warning-cta-label">Texto boton CTA</label>
+            <input id="admin-plan-trial-warning-cta-label" type="text" maxlength="60">
+
+            <label for="admin-plan-trial-warning-cta-url">URL CTA</label>
+            <input id="admin-plan-trial-warning-cta-url" type="text" maxlength="300" placeholder="planes.html o https://...">
+
+            <label for="admin-plan-trial-block-title">Titulo overlay bloqueo</label>
+            <input id="admin-plan-trial-block-title" type="text" maxlength="90">
+
+            <label for="admin-plan-trial-block-message">Mensaje overlay bloqueo</label>
+            <textarea id="admin-plan-trial-block-message" rows="3" maxlength="260"></textarea>
+
+            <label for="admin-plan-trial-whatsapp-number">WhatsApp soporte (solo digitos)</label>
+            <input id="admin-plan-trial-whatsapp-number" type="text" maxlength="20" inputmode="numeric" placeholder="54911...">
+
+            <label for="admin-plan-trial-whatsapp-text">Texto WhatsApp prellenado</label>
+            <textarea id="admin-plan-trial-whatsapp-text" rows="2" maxlength="220"></textarea>
+          </fieldset>
+
           <button id="admin-plan-save-btn" type="submit">Guardar cambios</button>
         </form>
       </section>

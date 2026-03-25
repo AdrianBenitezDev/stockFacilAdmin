@@ -14,6 +14,18 @@ const ALLOWED_ADMIN_EMAILS = new Set([
   "artbenitezdev@gmail.com",
   "admin@stockfacil.com.ar"
 ]);
+const TRIAL_PLAN_ID = "prueba";
+const DEFAULT_TRIAL_CONTROL = {
+  trialAccessAllowed: true,
+  trialWarningEnabled: false,
+  trialWarningText: "Tu prueba esta por finalizar, actualiza tu plan para seguir usando la sincronizacion.",
+  trialWarningCtaLabel: "Actualizar suscripcion",
+  trialWarningCtaUrl: "planes.html",
+  trialBlockTitle: "Tu periodo de prueba finalizo",
+  trialBlockMessage: "Para seguir usando StockFacil debes actualizar tu plan.",
+  trialBlockWhatsappNumber: "",
+  trialBlockWhatsappText: "Hola, necesito ayuda para actualizar mi plan."
+};
 
 const firebaseConfig = {
   apiKey: "AIzaSyDyYK9NtitNWkIiK-UIPUKCZ3PwJ1a10t0",
@@ -83,6 +95,27 @@ const planFeaturesInput = document.getElementById("admin-plan-features");
 const planMaxEmployeesInput = document.getElementById("admin-plan-max-employees");
 const planOrderInput = document.getElementById("admin-plan-order");
 const planActiveInput = document.getElementById("admin-plan-active");
+const trialControlGroup = document.getElementById("admin-trial-control-group");
+const planTrialAccessAllowedInput = document.getElementById("admin-plan-trial-access-allowed");
+const planTrialWarningEnabledInput = document.getElementById("admin-plan-trial-warning-enabled");
+const planTrialWarningTextInput = document.getElementById("admin-plan-trial-warning-text");
+const planTrialWarningCtaLabelInput = document.getElementById("admin-plan-trial-warning-cta-label");
+const planTrialWarningCtaUrlInput = document.getElementById("admin-plan-trial-warning-cta-url");
+const planTrialBlockTitleInput = document.getElementById("admin-plan-trial-block-title");
+const planTrialBlockMessageInput = document.getElementById("admin-plan-trial-block-message");
+const planTrialWhatsappNumberInput = document.getElementById("admin-plan-trial-whatsapp-number");
+const planTrialWhatsappTextInput = document.getElementById("admin-plan-trial-whatsapp-text");
+const TRIAL_CONTROL_INPUTS = [
+  planTrialAccessAllowedInput,
+  planTrialWarningEnabledInput,
+  planTrialWarningTextInput,
+  planTrialWarningCtaLabelInput,
+  planTrialWarningCtaUrlInput,
+  planTrialBlockTitleInput,
+  planTrialBlockMessageInput,
+  planTrialWhatsappNumberInput,
+  planTrialWhatsappTextInput
+].filter(Boolean);
 const planSaveBtn = document.getElementById("admin-plan-save-btn");
 const productsFeedbackNode = document.getElementById("admin-products-feedback");
 const productsUserSelect = document.getElementById("admin-products-user-select");
@@ -2055,6 +2088,8 @@ async function loadPlans() {
     setPlansFeedback("");
     if (!allPlans.length) {
       selectedPlanId = "";
+      resetTrialControlForm();
+      toggleTrialControlEditor(false);
       planForm?.classList.add("hidden");
       return;
     }
@@ -2087,7 +2122,8 @@ function normalizePlans(source) {
         orden: Number.isFinite(Number(plan?.orden)) ? Number(plan.orden) : 0,
         maxEmpleados: Number.isFinite(Number(plan?.maxEmpleados))
           ? Number(plan.maxEmpleados)
-          : 0
+          : 0,
+        trialControl: id === TRIAL_PLAN_ID ? normalizeTrialControl(plan?.trialControl) : null
       };
     })
     .filter((plan) => Boolean(plan.id))
@@ -2135,6 +2171,14 @@ function selectPlan(planId) {
   planMaxEmployeesInput.value = String(plan.maxEmpleados || 0);
   planOrderInput.value = String(plan.orden || 0);
   planActiveInput.checked = Boolean(plan.activo);
+
+  const isTrialPlan = plan.id === TRIAL_PLAN_ID;
+  if (isTrialPlan) {
+    fillTrialControlForm(plan.trialControl);
+  } else {
+    resetTrialControlForm();
+  }
+  toggleTrialControlEditor(isTrialPlan);
   planForm?.classList.remove("hidden");
 }
 
@@ -2160,6 +2204,9 @@ async function handlePlanSave(event) {
       orden: toPositiveInteger(planOrderInput.value),
       activo: Boolean(planActiveInput.checked)
     };
+    if (selectedPlanId === TRIAL_PLAN_ID) {
+      payload.trialControl = readTrialControlForm();
+    }
 
     const response = await fetchWithLoading(getAdminPlansEndpoint(), {
       method: "PUT",
@@ -2338,6 +2385,8 @@ function showLoggedOutState() {
   setImportBackupFeedback("Selecciona usuario destino, tipo y archivo para simular.");
   setImportPreviewPlaceholder("Selecciona un archivo para simular la carga.");
   renderBackupSalesTable([]);
+  resetTrialControlForm();
+  toggleTrialControlEditor(false);
   planForm?.classList.add("hidden");
   userActionsPanel?.classList.add("hidden");
   globalLoadingNode?.classList.add("hidden");
@@ -2776,6 +2825,151 @@ function toPositiveInteger(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric) || numeric < 0) return 0;
   return Math.trunc(numeric);
+}
+
+function normalizeTrialControl(inputLike, fallbackLike = null) {
+  const input = asObject(inputLike);
+  const fallback = asObject(fallbackLike);
+  return {
+    trialAccessAllowed: toSafeBoolean(
+      input.trialAccessAllowed,
+      toSafeBoolean(fallback.trialAccessAllowed, DEFAULT_TRIAL_CONTROL.trialAccessAllowed)
+    ),
+    trialWarningEnabled: toSafeBoolean(
+      input.trialWarningEnabled,
+      toSafeBoolean(fallback.trialWarningEnabled, DEFAULT_TRIAL_CONTROL.trialWarningEnabled)
+    ),
+    trialWarningText: normalizeTextWithMax(
+      input.trialWarningText,
+      fallback.trialWarningText || DEFAULT_TRIAL_CONTROL.trialWarningText,
+      220
+    ),
+    trialWarningCtaLabel: normalizeTextWithMax(
+      input.trialWarningCtaLabel,
+      fallback.trialWarningCtaLabel || DEFAULT_TRIAL_CONTROL.trialWarningCtaLabel,
+      60
+    ),
+    trialWarningCtaUrl: normalizeUrl(
+      input.trialWarningCtaUrl,
+      fallback.trialWarningCtaUrl || DEFAULT_TRIAL_CONTROL.trialWarningCtaUrl
+    ),
+    trialBlockTitle: normalizeTextWithMax(
+      input.trialBlockTitle,
+      fallback.trialBlockTitle || DEFAULT_TRIAL_CONTROL.trialBlockTitle,
+      90
+    ),
+    trialBlockMessage: normalizeTextWithMax(
+      input.trialBlockMessage,
+      fallback.trialBlockMessage || DEFAULT_TRIAL_CONTROL.trialBlockMessage,
+      260
+    ),
+    trialBlockWhatsappNumber: normalizeWhatsappNumber(
+      input.trialBlockWhatsappNumber,
+      fallback.trialBlockWhatsappNumber || DEFAULT_TRIAL_CONTROL.trialBlockWhatsappNumber
+    ),
+    trialBlockWhatsappText: normalizeTextWithMax(
+      input.trialBlockWhatsappText,
+      fallback.trialBlockWhatsappText || DEFAULT_TRIAL_CONTROL.trialBlockWhatsappText,
+      220
+    )
+  };
+}
+
+function readTrialControlForm() {
+  return normalizeTrialControl({
+    trialAccessAllowed: Boolean(planTrialAccessAllowedInput?.checked),
+    trialWarningEnabled: Boolean(planTrialWarningEnabledInput?.checked),
+    trialWarningText: planTrialWarningTextInput?.value,
+    trialWarningCtaLabel: planTrialWarningCtaLabelInput?.value,
+    trialWarningCtaUrl: planTrialWarningCtaUrlInput?.value,
+    trialBlockTitle: planTrialBlockTitleInput?.value,
+    trialBlockMessage: planTrialBlockMessageInput?.value,
+    trialBlockWhatsappNumber: planTrialWhatsappNumberInput?.value,
+    trialBlockWhatsappText: planTrialWhatsappTextInput?.value
+  });
+}
+
+function fillTrialControlForm(controlLike) {
+  const control = normalizeTrialControl(controlLike, DEFAULT_TRIAL_CONTROL);
+  if (planTrialAccessAllowedInput) {
+    planTrialAccessAllowedInput.checked = control.trialAccessAllowed === true;
+  }
+  if (planTrialWarningEnabledInput) {
+    planTrialWarningEnabledInput.checked = control.trialWarningEnabled === true;
+  }
+  if (planTrialWarningTextInput) {
+    planTrialWarningTextInput.value = control.trialWarningText;
+  }
+  if (planTrialWarningCtaLabelInput) {
+    planTrialWarningCtaLabelInput.value = control.trialWarningCtaLabel;
+  }
+  if (planTrialWarningCtaUrlInput) {
+    planTrialWarningCtaUrlInput.value = control.trialWarningCtaUrl;
+  }
+  if (planTrialBlockTitleInput) {
+    planTrialBlockTitleInput.value = control.trialBlockTitle;
+  }
+  if (planTrialBlockMessageInput) {
+    planTrialBlockMessageInput.value = control.trialBlockMessage;
+  }
+  if (planTrialWhatsappNumberInput) {
+    planTrialWhatsappNumberInput.value = control.trialBlockWhatsappNumber;
+  }
+  if (planTrialWhatsappTextInput) {
+    planTrialWhatsappTextInput.value = control.trialBlockWhatsappText;
+  }
+}
+
+function resetTrialControlForm() {
+  fillTrialControlForm(DEFAULT_TRIAL_CONTROL);
+}
+
+function toggleTrialControlEditor(visible) {
+  const shouldShow = visible === true;
+  trialControlGroup?.classList.toggle("hidden", !shouldShow);
+  TRIAL_CONTROL_INPUTS.forEach((input) => {
+    input.disabled = !shouldShow;
+  });
+}
+
+function normalizeTextWithMax(valueLike, fallbackLike, maxLength) {
+  const raw = String(valueLike || "").trim();
+  if (!raw) {
+    return String(fallbackLike || "").trim().slice(0, maxLength);
+  }
+  return raw.slice(0, maxLength);
+}
+
+function normalizeUrl(valueLike, fallbackLike) {
+  const fallback = String(fallbackLike || "planes.html").trim() || "planes.html";
+  const raw = String(valueLike || "").trim();
+  if (!raw) return fallback;
+  if (/^https?:\/\//i.test(raw)) return raw.slice(0, 300);
+
+  const normalized = raw.replace(/^\/+/, "");
+  if (!normalized) return fallback;
+  if (/^javascript:/i.test(normalized)) return fallback;
+  return normalized.slice(0, 300);
+}
+
+function normalizeWhatsappNumber(valueLike, fallbackLike = "") {
+  const normalized = String(valueLike || "").trim().replace(/[^\d]/g, "");
+  if (normalized) return normalized.slice(0, 20);
+  return String(fallbackLike || "").trim().replace(/[^\d]/g, "").slice(0, 20);
+}
+
+function toSafeBoolean(valueLike, fallback) {
+  if (typeof valueLike === "boolean") return valueLike;
+  if (typeof valueLike === "string") {
+    const normalized = valueLike.trim().toLowerCase();
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+  }
+  return Boolean(fallback);
+}
+
+function asObject(valueLike) {
+  return valueLike && typeof valueLike === "object" ? valueLike : {};
 }
 
 async function fetchWithLoading(input, init) {
