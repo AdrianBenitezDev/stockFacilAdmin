@@ -441,6 +441,22 @@ td {
   background: #ecfeff;
 }
 
+#admin-users-table-body tr.is-trial {
+  background: #fffbe6;
+}
+
+#admin-users-table-body tr.is-trial:hover {
+  background: #fff4bf;
+}
+
+#admin-users-table-body tr.is-trial td:first-child {
+  border-left: 3px solid #facc15;
+}
+
+#admin-users-table-body tr.is-selected.is-trial {
+  background: #fff1a8;
+}
+
 #admin-cashboxes-table-body tr[data-cashbox-key] {
   cursor: pointer;
 }
@@ -588,6 +604,31 @@ thead th {
 .user-actions-panel h3,
 .user-actions-panel h4 {
   margin-top: 0;
+}
+
+#admin-user-trial-control-group {
+  margin-top: 0.8rem;
+}
+
+#admin-user-trial-save-btn {
+  width: fit-content;
+}
+
+#admin-user-trial-feedback {
+  margin: 0;
+  min-height: 1.2rem;
+}
+
+#admin-user-trial-feedback.is-success {
+  color: #0f766e;
+}
+
+#admin-user-trial-feedback.is-warning {
+  color: #92400e;
+}
+
+#admin-user-trial-feedback.is-error {
+  color: var(--danger);
 }
 
 .user-actions-buttons {

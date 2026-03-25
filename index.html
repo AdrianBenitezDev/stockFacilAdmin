@@ -132,6 +132,23 @@
                 <button id="admin-toggle-user-status-btn" type="button" class="mode-btn-secondary">Suspender cuenta</button>
                 <button id="admin-open-whatsapp-btn" type="button">Abrir WhatsApp</button>
               </div>
+
+              <fieldset id="admin-user-trial-control-group" class="trial-control-group hidden">
+                <legend>Control trial de esta cuenta</legend>
+
+                <label class="checkbox-field" for="admin-user-trial-access-allowed">
+                  <input id="admin-user-trial-access-allowed" type="checkbox" checked>
+                  Permitir acceso (trialAccessAllowed)
+                </label>
+
+                <label class="checkbox-field" for="admin-user-trial-warning-enabled">
+                  <input id="admin-user-trial-warning-enabled" type="checkbox">
+                  Mostrar warning (trialWarningEnabled)
+                </label>
+
+                <button id="admin-user-trial-save-btn" type="button">Guardar control trial</button>
+                <p id="admin-user-trial-feedback" class="feedback" aria-live="polite"></p>
+              </fieldset>
             </section>
           </div>
         </div>

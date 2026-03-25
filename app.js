@@ -70,6 +70,11 @@ const userActionsPanel = document.getElementById("admin-user-actions-panel");
 const selectedUserMeta = document.getElementById("admin-selected-user-meta");
 const toggleUserStatusBtn = document.getElementById("admin-toggle-user-status-btn");
 const openWhatsappBtn = document.getElementById("admin-open-whatsapp-btn");
+const userTrialControlGroup = document.getElementById("admin-user-trial-control-group");
+const userTrialAccessAllowedInput = document.getElementById("admin-user-trial-access-allowed");
+const userTrialWarningEnabledInput = document.getElementById("admin-user-trial-warning-enabled");
+const userTrialSaveBtn = document.getElementById("admin-user-trial-save-btn");
+const userTrialFeedbackNode = document.getElementById("admin-user-trial-feedback");
 const employeesFeedbackNode = document.getElementById("admin-employees-feedback");
 const employeesUserSelect = document.getElementById("admin-employees-user-select");
 const employeesTableBody = document.getElementById("admin-employees-table-body");
@@ -252,6 +257,7 @@ async function init() {
   seedBusinessCatalogBtn?.addEventListener("click", handleSeedBusinessCatalogClick);
   toggleUserStatusBtn?.addEventListener("click", handleToggleUserStatus);
   openWhatsappBtn?.addEventListener("click", openSelectedUserWhatsapp);
+  userTrialSaveBtn?.addEventListener("click", handleSaveSelectedUserTrialControl);
   employeesTableBody?.addEventListener("click", handleEmployeeToggleClick);
   document.addEventListener("keydown", handleGlobalKeydown);
 
@@ -357,12 +363,21 @@ async function loadOverview() {
 function renderOverview(payload) {
   allUserRows = Array.isArray(payload?.rows) ? payload.rows : [];
   if (selectedUserUid) {
+    const previousSelectedRow = selectedUserRow;
     selectedUserRow =
       allUserRows.find((row) => String(row?.uid || "").trim() === selectedUserUid) || null;
     if (!selectedUserRow) {
       selectedUserUid = "";
       userActionsPanel?.classList.add("hidden");
     } else {
+      if (previousSelectedRow && String(previousSelectedRow?.uid || "").trim() === selectedUserUid) {
+        selectedUserRow = {
+          ...selectedUserRow,
+          trialAccessAllowed: previousSelectedRow?.trialAccessAllowed,
+          trialWarningEnabled: previousSelectedRow?.trialWarningEnabled,
+          trialControlLoaded: previousSelectedRow?.trialControlLoaded === true
+        };
+      }
       renderSelectedUserActions();
     }
   }
@@ -410,7 +425,11 @@ function applyUsersFilter() {
   tableBody.innerHTML = rows
     .map((row) => {
       const isSelected = selectedUserUid && selectedUserUid === String(row?.uid || "").trim();
-      const rowClass = isSelected ? ' class="is-selected"' : "";
+      const isTrialPlan = normalizePlanId(row?.planActual) === TRIAL_PLAN_ID;
+      const rowClasses = [];
+      if (isSelected) rowClasses.push("is-selected");
+      if (isTrialPlan) rowClasses.push("is-trial");
+      const rowClass = rowClasses.length ? ` class="${rowClasses.join(" ")}"` : "";
       return [
         `<tr data-user-uid="${escapeHtml(String(row.uid || ""))}"${rowClass}>`,
         `<td>${escapeHtml(row.nombre || "-")}</td>`,
@@ -444,9 +463,17 @@ function handleUserRowClick(event) {
 
 async function selectUserRow(row) {
   selectedUserUid = String(row?.uid || "").trim();
-  selectedUserRow = row || null;
+  selectedUserRow = row
+    ? {
+        ...row,
+        trialAccessAllowed: toTrialBoolean(row?.trialAccessAllowed, true),
+        trialWarningEnabled: toTrialBoolean(row?.trialWarningEnabled, false),
+        trialControlLoaded: row?.trialControlLoaded === true
+      }
+    : null;
 
   applyUsersFilter();
+  setUserTrialFeedback("");
   renderSelectedUserActions();
   userActionsPanel?.classList.remove("hidden");
   renderUserDocOverlayLoading(selectedUserRow);
@@ -2387,6 +2414,11 @@ function showLoggedOutState() {
   renderBackupSalesTable([]);
   resetTrialControlForm();
   toggleTrialControlEditor(false);
+  if (userTrialAccessAllowedInput) userTrialAccessAllowedInput.checked = true;
+  if (userTrialWarningEnabledInput) userTrialWarningEnabledInput.checked = false;
+  if (userTrialSaveBtn) userTrialSaveBtn.disabled = true;
+  userTrialControlGroup?.classList.add("hidden");
+  setUserTrialFeedback("");
   planForm?.classList.add("hidden");
   userActionsPanel?.classList.add("hidden");
   globalLoadingNode?.classList.add("hidden");
@@ -3050,6 +3082,32 @@ function renderSelectedUserActions() {
   if (openWhatsappBtn) {
     openWhatsappBtn.disabled = !phoneDigits;
   }
+
+  const isTrialPlan = normalizePlanId(selectedUserRow?.planActual) === TRIAL_PLAN_ID;
+  userTrialControlGroup?.classList.toggle("hidden", !isTrialPlan);
+  if (userTrialSaveBtn) {
+    userTrialSaveBtn.disabled = !isTrialPlan;
+  }
+
+  if (!isTrialPlan) {
+    setUserTrialFeedback("");
+    return;
+  }
+
+  if (userTrialAccessAllowedInput) {
+    userTrialAccessAllowedInput.checked = toTrialBoolean(selectedUserRow?.trialAccessAllowed, true);
+  }
+  if (userTrialWarningEnabledInput) {
+    userTrialWarningEnabledInput.checked = toTrialBoolean(selectedUserRow?.trialWarningEnabled, false);
+  }
+
+  const loaded = selectedUserRow?.trialControlLoaded === true;
+  if (!loaded && !String(userTrialFeedbackNode?.textContent || "").trim()) {
+    setUserTrialFeedback("Cargando control trial...", "warning");
+  }
+  if (loaded && String(userTrialFeedbackNode?.textContent || "").trim() === "Cargando control trial...") {
+    setUserTrialFeedback("");
+  }
 }
 
 function openUserDocOverlay() {
@@ -3462,14 +3520,36 @@ async function loadSelectedUserAccountDetails() {
       throw new Error(result?.error || "No se pudieron cargar los detalles de la cuenta.");
     }
 
-    if (result?.employer) {
+    if (result?.employer || result?.tenant) {
+      const tenantPlanId = normalizePlanId(
+        result?.tenant?.planId || result?.tenant?.planActual || selectedUserRow?.planActual
+      );
+      const trialAccessAllowed = toTrialBoolean(
+        result?.tenant?.trialControl?.trialAccessAllowed,
+        selectedUserRow?.trialAccessAllowed
+      );
+      const trialWarningEnabled = toTrialBoolean(
+        result?.tenant?.trialControl?.trialWarningEnabled,
+        selectedUserRow?.trialWarningEnabled
+      );
       selectedUserRow = {
         ...selectedUserRow,
-        activo: result.employer.activo !== false
+        activo: result?.employer ? result.employer.activo !== false : selectedUserRow?.activo !== false,
+        planActual: tenantPlanId || normalizePlanId(selectedUserRow?.planActual) || selectedUserRow?.planActual || "-",
+        trialAccessAllowed,
+        trialWarningEnabled,
+        trialControlLoaded: Boolean(result?.tenant)
       };
       allUserRows = allUserRows.map((row) =>
         String(row?.uid || "").trim() === selectedUserUid
-          ? { ...row, activo: selectedUserRow.activo }
+          ? {
+              ...row,
+              activo: selectedUserRow.activo,
+              planActual: selectedUserRow.planActual,
+              trialAccessAllowed: selectedUserRow.trialAccessAllowed,
+              trialWarningEnabled: selectedUserRow.trialWarningEnabled,
+              trialControlLoaded: selectedUserRow.trialControlLoaded
+            }
           : row
       );
       applyUsersFilter();
@@ -3578,6 +3658,90 @@ async function handleToggleUserStatus() {
   }
 }
 
+async function handleSaveSelectedUserTrialControl() {
+  if (!selectedUserRow || !auth.currentUser) return;
+
+  const tenantId = String(selectedUserRow?.tenantId || "").trim();
+  if (!tenantId) {
+    setUserTrialFeedback("No se pudo resolver el tenant del usuario seleccionado.", "error");
+    return;
+  }
+
+  const isTrialPlan = normalizePlanId(selectedUserRow?.planActual) === TRIAL_PLAN_ID;
+  if (!isTrialPlan) {
+    setUserTrialFeedback("Solo se puede editar control trial en cuentas del plan prueba.", "warning");
+    return;
+  }
+
+  const trialAccessAllowed = Boolean(userTrialAccessAllowedInput?.checked);
+  const trialWarningEnabled = Boolean(userTrialWarningEnabledInput?.checked);
+  if (userTrialSaveBtn) userTrialSaveBtn.disabled = true;
+  setUserTrialFeedback("Guardando control trial...", "warning");
+
+  try {
+    const token = await auth.currentUser.getIdToken(true);
+    const response = await fetchWithLoading(getAdminAccountsEndpoint(), {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        action: "update_trial_control",
+        tenantId,
+        trialControl: {
+          trialAccessAllowed,
+          trialWarningEnabled
+        }
+      })
+    });
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      throw new Error(result?.error || "No se pudo guardar el control trial.");
+    }
+
+    const resolvedPlan = normalizePlanId(
+      result?.tenant?.planId || result?.tenant?.planActual || selectedUserRow?.planActual
+    );
+    const resolvedAccessAllowed = toTrialBoolean(
+      result?.tenant?.trialControl?.trialAccessAllowed,
+      trialAccessAllowed
+    );
+    const resolvedWarningEnabled = toTrialBoolean(
+      result?.tenant?.trialControl?.trialWarningEnabled,
+      trialWarningEnabled
+    );
+
+    selectedUserRow = {
+      ...selectedUserRow,
+      planActual: resolvedPlan || selectedUserRow?.planActual || "-",
+      trialAccessAllowed: resolvedAccessAllowed,
+      trialWarningEnabled: resolvedWarningEnabled,
+      trialControlLoaded: true
+    };
+    allUserRows = allUserRows.map((row) =>
+      String(row?.uid || "").trim() === selectedUserUid
+        ? {
+            ...row,
+            planActual: selectedUserRow.planActual,
+            trialAccessAllowed: selectedUserRow.trialAccessAllowed,
+            trialWarningEnabled: selectedUserRow.trialWarningEnabled,
+            trialControlLoaded: true
+          }
+        : row
+    );
+    applyUsersFilter();
+    renderSelectedUserActions();
+    setUserTrialFeedback("Control trial actualizado.", "success");
+  } catch (error) {
+    console.error(error);
+    setUserTrialFeedback(error.message || "No se pudo guardar el control trial.", "error");
+  } finally {
+    if (userTrialSaveBtn) userTrialSaveBtn.disabled = false;
+  }
+}
+
 function openSelectedUserWhatsapp() {
   if (!selectedUserRow) return;
   const digits = sanitizePhoneToDigits(selectedUserRow?.telefono);
@@ -3588,6 +3752,41 @@ function openSelectedUserWhatsapp() {
 function sanitizePhoneToDigits(value) {
   const digits = String(value || "").replace(/\D/g, "");
   return digits.length >= 6 ? digits : "";
+}
+
+function setUserTrialFeedback(message, type = "") {
+  if (!userTrialFeedbackNode) return;
+  userTrialFeedbackNode.textContent = String(message || "");
+  userTrialFeedbackNode.classList.remove("is-success", "is-warning", "is-error");
+  if (type === "success") {
+    userTrialFeedbackNode.classList.add("is-success");
+    return;
+  }
+  if (type === "warning") {
+    userTrialFeedbackNode.classList.add("is-warning");
+    return;
+  }
+  if (type === "error") {
+    userTrialFeedbackNode.classList.add("is-error");
+  }
+}
+
+function normalizePlanId(valueLike) {
+  const raw = String(valueLike || "").trim().toLowerCase();
+  if (!raw) return "";
+  if (raw === "trial" || raw === "free" || raw === "gratis") return TRIAL_PLAN_ID;
+  if (raw.includes("prueba")) return TRIAL_PLAN_ID;
+  return raw;
+}
+
+function toTrialBoolean(valueLike, fallback) {
+  if (typeof valueLike === "boolean") return valueLike;
+  if (typeof valueLike === "string") {
+    const normalized = valueLike.trim().toLowerCase();
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+  }
+  return typeof fallback === "boolean" ? fallback : Boolean(fallback);
 }
 
 function setEmployeesFeedback(message) {
