@@ -55,6 +55,54 @@ export const BUSINESS_CATALOG_SEED =
         "Bolsos",
         "Otros"
       ]
+    },
+     {
+      "id": "gim",
+      "nombre": "Gimnasio",
+      "activo": true,
+      "orden": 3,
+      "categorias": [
+        "snacks",
+        "bebidas",
+        "proteinas",
+        "Otros"
+      ]
+    },
+    {
+      "id": "regaleria",
+      "nombre": "Regalería",
+      "activo": true,
+      "orden": 4,
+      "categorias": [
+        "Regalos",
+        "Souvenirs",
+        "Decoración",
+        "Tazas",
+        "Llaveros",
+        "Peluches",
+        "Perfumes",
+        "Velas Aromáticas",
+        "Portarretratos",
+        "Cuadros",
+        "Relojes",
+        "Bijouterie",
+        "Accesorios de Moda",
+        "Bolsos y Carteras",
+        "Mochilas",
+        "Papelería",
+        "Tarjetas y Postales",
+        "Juguetes",
+        "Juegos de Mesa",
+        "Rompecabezas",
+        "Libretas y Agendas",
+        "Plantas y Macetas",
+        "Hogar y Cocina",
+        "Botellas y Termos",
+        "Gadgets y Tecnología",
+        "Productos Personalizados",
+        "Artículos de Temporada",
+        "Otros"
+      ]
     }
   ]
 }
