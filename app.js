@@ -15,6 +15,27 @@ const ALLOWED_ADMIN_EMAILS = new Set([
   "admin@stockfacil.com.ar"
 ]);
 const TRIAL_PLAN_ID = "prueba";
+const STARTER_PLAN_ID = "starter";
+
+const STARTER_PLAN_SEED = Object.freeze({
+  id: STARTER_PLAN_ID,
+  titulo: "Starter",
+  precio: "$ 5000",
+  descripcion: "Plan inicial para empezar a usar StockFacil.",
+  caracteristicas: [
+    "Gestion de productos y stock",
+    "Registro de ventas y caja",
+    "1 cuenta empleado incluida",
+    "Metricas mensuales",
+    "Sin Sincronización en la nube",
+    "1 solo dispositivo habilitado",
+    "ideal para pequeños negocios",
+    "Soporte por WhatsApp Limitado"
+  ],
+  maxEmpleados: 1,
+  orden: 1,
+  activo: true
+});
 const DEFAULT_TRIAL_CONTROL = {
   trialAccessAllowed: true,
   trialWarningEnabled: false,
@@ -89,6 +110,7 @@ const metricTotalEmployees = document.getElementById("metric-total-employees");
 const metricTotalProducts = document.getElementById("metric-total-products");
 const metricEstimatedRevenue = document.getElementById("metric-estimated-revenue");
 const plansFeedbackNode = document.getElementById("admin-plans-feedback");
+const seedStarterPlanBtn = document.getElementById("admin-seed-starter-plan-btn");
 const seedBusinessCatalogBtn = document.getElementById("admin-seed-business-catalog-btn");
 const planCardsNode = document.getElementById("admin-plan-cards");
 const planForm = document.getElementById("admin-plan-form");
@@ -254,6 +276,7 @@ async function init() {
   userDocOverlayTenantContent?.addEventListener("click", handleUserDocCardRowCopyClick);
   planCardsNode?.addEventListener("click", handlePlanCardClick);
   planForm?.addEventListener("submit", handlePlanSave);
+  seedStarterPlanBtn?.addEventListener("click", handleSeedStarterPlanClick);
   seedBusinessCatalogBtn?.addEventListener("click", handleSeedBusinessCatalogClick);
   toggleUserStatusBtn?.addEventListener("click", handleToggleUserStatus);
   openWhatsappBtn?.addEventListener("click", openSelectedUserWhatsapp);
@@ -2259,6 +2282,45 @@ async function handlePlanSave(event) {
     setPlansFeedback(error.message || "No se pudo guardar el plan.");
   } finally {
     if (planSaveBtn) planSaveBtn.disabled = false;
+  }
+}
+
+async function handleSeedStarterPlanClick() {
+  if (!auth.currentUser) return;
+  if (!seedStarterPlanBtn) return;
+
+  const confirmed = window.confirm(
+    "Esto va a crear o actualizar el plan starter con la configuracion seed. Deseas continuar?"
+  );
+  if (!confirmed) return;
+
+  seedStarterPlanBtn.disabled = true;
+  setPlansFeedback("Publicando seed del plan starter...");
+
+  try {
+    const token = await auth.currentUser.getIdToken(true);
+    const response = await fetchWithLoading(getAdminPlansEndpoint(), {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(STARTER_PLAN_SEED)
+    });
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      throw new Error(result?.error || "No se pudo seedear el plan starter.");
+    }
+
+    selectedPlanId = STARTER_PLAN_ID;
+    await loadPlans();
+    setPlansFeedback("Plan starter creado/actualizado correctamente.");
+  } catch (error) {
+    console.error(error);
+    setPlansFeedback(error.message || "No se pudo seedear el plan starter.");
+  } finally {
+    seedStarterPlanBtn.disabled = false;
   }
 }
 

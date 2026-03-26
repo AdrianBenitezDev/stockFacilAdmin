@@ -511,6 +511,16 @@ thead th {
   margin-top: 0.7rem;
 }
 
+.plans-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.plans-actions button {
+  margin-top: 0;
+}
+
 .plan-card {
   margin-top: 0;
   display: grid;
@@ -665,6 +675,10 @@ thead th {
 
   .plan-cards {
     grid-template-columns: 1fr;
+  }
+
+  .plans-actions {
+    flex-direction: column;
   }
 
   .products-filters {
