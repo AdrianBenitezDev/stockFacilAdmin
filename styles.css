@@ -329,14 +329,11 @@ button:hover {
 }
 
 #admin-users-search,
+#admin-manager-user-select,
 #admin-employees-user-select,
-#admin-products-user-select,
 #admin-products-search,
-#admin-sales-user-select,
 #admin-sales-search,
-#admin-cashboxes-user-select,
 #admin-cashboxes-search,
-#admin-backups-user-select,
 #admin-backups-search,
 #admin-import-target-user-select,
 #admin-import-backup-type,
@@ -351,14 +348,11 @@ button:hover {
 }
 
 #admin-users-search:focus,
+#admin-manager-user-select:focus,
 #admin-employees-user-select:focus,
-#admin-products-user-select:focus,
 #admin-products-search:focus,
-#admin-sales-user-select:focus,
 #admin-sales-search:focus,
-#admin-cashboxes-user-select:focus,
 #admin-cashboxes-search:focus,
-#admin-backups-user-select:focus,
 #admin-backups-search:focus,
 #admin-import-target-user-select:focus,
 #admin-import-backup-type:focus,
@@ -371,7 +365,7 @@ button:hover {
 
 .products-filters {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 0.7rem;
   margin-bottom: 0.75rem;
 }
@@ -379,6 +373,20 @@ button:hover {
 .products-filter-group {
   display: grid;
   gap: 0.4rem;
+}
+
+#admin-manager-section {
+  display: grid;
+  gap: 0.75rem;
+}
+
+#admin-manager-user-select {
+  max-width: 560px;
+}
+
+.manager-sub-nav {
+  margin: 0;
+  flex-wrap: wrap;
 }
 
 .backup-btn {

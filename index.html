@@ -42,10 +42,7 @@
         <button id="admin-nav-users-btn" type="button" class="mode-btn is-active">Usuarios</button>
         <button id="admin-nav-employees-btn" type="button" class="mode-btn-secondary">Empleados</button>
         <button id="admin-nav-plans-btn" type="button" class="mode-btn-secondary">Planes</button>
-        <button id="admin-nav-products-btn" type="button" class="mode-btn-secondary">Productos</button>
-        <button id="admin-nav-sales-btn" type="button" class="mode-btn-secondary">Ventas</button>
-        <button id="admin-nav-cashboxes-btn" type="button" class="mode-btn-secondary">Cajas</button>
-        <button id="admin-nav-backups-btn" type="button" class="mode-btn-secondary">Backup</button>
+        <button id="admin-nav-manager-btn" type="button" class="mode-btn-secondary">Administrador</button>
       </div>
 
       <section id="admin-users-section">
@@ -268,243 +265,37 @@
         </form>
       </section>
 
-      <section id="admin-products-section" class="hidden">
-        <p class="subtitle">Explora productos por usuario activo.</p>
-        <p id="admin-products-feedback" class="feedback" aria-live="polite"></p>
-        <button id="admin-products-backup-btn" type="button" class="mode-btn-secondary backup-btn">Backup productos</button>
+      <section id="admin-manager-section" class="hidden">
+        <p class="subtitle">Gestion centralizada por usuario para productos, ventas, cajas y backups.</p>
 
-        <div class="products-filters">
-          <div class="products-filter-group">
-            <label for="admin-products-user-select" class="users-filters-label">Usuario activo</label>
-            <select id="admin-products-user-select">
-              <option value="">Selecciona un usuario...</option>
-            </select>
-          </div>
-
-          <div class="products-filter-group">
-            <label for="admin-products-search" class="users-filters-label">Buscar producto</label>
-            <input
-              id="admin-products-search"
-              type="search"
-              placeholder="Codigo, nombre o categoria"
-              autocomplete="off"
-            >
-          </div>
+        <div class="users-filters">
+          <label for="admin-manager-user-select" class="users-filters-label">Usuario activo</label>
+          <select id="admin-manager-user-select">
+            <option value="">Selecciona un usuario...</option>
+          </select>
         </div>
 
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Codigo</th>
-                <th>Nombre</th>
-                <th>Categoria</th>
-                <th>Stock</th>
-                <th>Precio venta</th>
-                <th>Precio compra</th>
-              </tr>
-            </thead>
-            <tbody id="admin-products-table-body">
-              <tr>
-                <td colspan="6">Selecciona un usuario activo para ver productos.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section id="admin-sales-section" class="hidden">
-        <p class="subtitle">Explora ventas por usuario activo.</p>
-        <p id="admin-sales-feedback" class="feedback" aria-live="polite"></p>
-        <button id="admin-sales-backup-btn" type="button" class="mode-btn-secondary backup-btn">Backup ventas</button>
-
-        <div class="products-filters">
-          <div class="products-filter-group">
-            <label for="admin-sales-user-select" class="users-filters-label">Usuario activo</label>
-            <select id="admin-sales-user-select">
-              <option value="">Selecciona un usuario...</option>
-            </select>
-          </div>
-
-          <div class="products-filter-group">
-            <label for="admin-sales-search" class="users-filters-label">Buscar venta</label>
-            <input
-              id="admin-sales-search"
-              type="search"
-              placeholder="ID, cliente, vendedor o metodo de pago"
-              autocomplete="off"
-            >
-          </div>
+        <div class="section-nav manager-sub-nav">
+          <button id="admin-manager-nav-products-btn" type="button" class="mode-btn is-active">Productos</button>
+          <button id="admin-manager-nav-sales-btn" type="button" class="mode-btn-secondary">Ventas</button>
+          <button id="admin-manager-nav-cashboxes-btn" type="button" class="mode-btn-secondary">Cajas</button>
+          <button id="admin-manager-nav-backups-btn" type="button" class="mode-btn-secondary">Backup</button>
         </div>
 
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Fecha</th>
-                <th>Cliente</th>
-                <th>Vendedor</th>
-                <th>Metodo pago</th>
-                <th>Total</th>
-              </tr>
-            </thead>
-            <tbody id="admin-sales-table-body">
-              <tr>
-                <td colspan="6">Selecciona un usuario activo para ver ventas.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section id="admin-cashboxes-section" class="hidden">
-        <p class="subtitle">Explora cajas por usuario activo.</p>
-        <p id="admin-cashboxes-feedback" class="feedback" aria-live="polite"></p>
-        <button id="admin-cashboxes-backup-btn" type="button" class="mode-btn-secondary backup-btn">Backup caja</button>
-
-        <div class="products-filters">
-          <div class="products-filter-group">
-            <label for="admin-cashboxes-user-select" class="users-filters-label">Usuario activo</label>
-            <select id="admin-cashboxes-user-select">
-              <option value="">Selecciona un usuario...</option>
-            </select>
-          </div>
-
-          <div class="products-filter-group">
-            <label for="admin-cashboxes-search" class="users-filters-label">Buscar caja</label>
-            <input
-              id="admin-cashboxes-search"
-              type="search"
-              placeholder="ID, responsable o estado"
-              autocomplete="off"
-            >
-          </div>
-        </div>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Apertura</th>
-                <th>Cierre</th>
-                <th>Responsable</th>
-                <th>Estado</th>
-                <th>Cantidad ventas</th>
-                <th>Saldo final</th>
-              </tr>
-            </thead>
-            <tbody id="admin-cashboxes-table-body">
-              <tr>
-                <td colspan="7">Selecciona un usuario activo para ver cajas.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <section id="admin-cashbox-detail-panel" class="cashbox-detail-panel">
-          <h3>Detalle de cierre</h3>
-          <p id="admin-cashbox-detail-feedback" class="subtitle">Haz click en una fila para ver el detalle completo.</p>
-          <pre id="admin-cashbox-detail-content" class="cashbox-detail-content">{}</pre>
-          <h4>Productos incluidos</h4>
-          <p id="admin-cashbox-products-feedback" class="subtitle">Sin productos seleccionados.</p>
-          <pre id="admin-cashbox-products-content" class="cashbox-detail-content">[]</pre>
-        </section>
-      </section>
-
-      <section id="admin-backups-section" class="hidden">
-        <p class="subtitle">Explora backups de ventas por usuario activo.</p>
-        <p id="admin-backups-feedback" class="feedback" aria-live="polite"></p>
-
-        <div class="products-filters">
-          <div class="products-filter-group">
-            <label for="admin-backups-user-select" class="users-filters-label">Usuario activo</label>
-            <select id="admin-backups-user-select">
-              <option value="">Selecciona un usuario...</option>
-            </select>
-          </div>
-
-          <div class="products-filter-group">
-            <label for="admin-backups-search" class="users-filters-label">Buscar backup</label>
-            <input
-              id="admin-backups-search"
-              type="search"
-              placeholder="Nombre archivo o usuario"
-              autocomplete="off"
-            >
-          </div>
-        </div>
-
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Archivo</th>
-                <th>Usuario</th>
-                <th>Fecha</th>
-                <th>Tamanio</th>
-                <th>Accion</th>
-              </tr>
-            </thead>
-            <tbody id="admin-backups-table-body">
-              <tr>
-                <td colspan="5">Selecciona un usuario activo para ver backups.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <section id="admin-backup-sales-panel" class="cashbox-detail-panel">
-          <h3>Ventas del backup</h3>
-          <p id="admin-backup-sales-feedback" class="subtitle">Selecciona un backup para ver sus ventas.</p>
-          <button id="admin-backup-download-btn" type="button" class="mode-btn-secondary backup-btn" disabled>Descargar backup seleccionado</button>
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>ID venta</th>
-                  <th>Fecha</th>
-                  <th>Usuario</th>
-                  <th>Items</th>
-                  <th>Pago</th>
-                  <th>Total</th>
-                </tr>
-              </thead>
-              <tbody id="admin-backup-sales-table-body">
-                <tr>
-                  <td colspan="6">Sin datos.</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section id="admin-backup-import-panel" class="cashbox-detail-panel">
-          <h3>Cargar backup en otro usuario</h3>
-          <p class="subtitle">Selecciona usuario destino, tipo de datos y archivo para simular la carga.</p>
-          <p id="admin-import-backup-feedback" class="feedback" aria-live="polite"></p>
+        <section id="admin-products-section">
+          <p class="subtitle">Explora productos del usuario seleccionado.</p>
+          <p id="admin-products-feedback" class="feedback" aria-live="polite"></p>
+          <button id="admin-products-backup-btn" type="button" class="mode-btn-secondary backup-btn">Backup productos</button>
 
           <div class="products-filters">
             <div class="products-filter-group">
-              <label for="admin-import-target-user-select" class="users-filters-label">Usuario destino</label>
-              <select id="admin-import-target-user-select">
-                <option value="">Selecciona un usuario...</option>
-              </select>
-            </div>
-
-            <div class="products-filter-group">
-              <label for="admin-import-backup-file" class="users-filters-label">Archivo backup (.json)</label>
-              <input id="admin-import-backup-file" type="file" accept="application/json,.json">
-            </div>
-
-            <div class="products-filter-group">
-              <label for="admin-import-backup-type" class="users-filters-label">Tipo a cargar</label>
-              <select id="admin-import-backup-type">
-                <option value="sales">Ventas</option>
-                <option value="cashboxes">Cajas</option>
-                <option value="products">Productos</option>
-              </select>
+              <label for="admin-products-search" class="users-filters-label">Buscar producto</label>
+              <input
+                id="admin-products-search"
+                type="search"
+                placeholder="Codigo, nombre o categoria"
+                autocomplete="off"
+              >
             </div>
           </div>
 
@@ -512,19 +303,215 @@
             <table>
               <thead>
                 <tr>
-                  <th>#</th>
-                  <th>ID</th>
-                  <th>Tenant</th>
-                  <th>Resumen</th>
+                  <th>Codigo</th>
+                  <th>Nombre</th>
+                  <th>Categoria</th>
+                  <th>Stock</th>
+                  <th>Precio venta</th>
+                  <th>Precio compra</th>
                 </tr>
               </thead>
-              <tbody id="admin-import-preview-table-body">
+              <tbody id="admin-products-table-body">
                 <tr>
-                  <td colspan="4">Selecciona un archivo para simular la carga.</td>
+                  <td colspan="6">Selecciona un usuario en Administrador para ver productos.</td>
                 </tr>
               </tbody>
             </table>
           </div>
+        </section>
+
+        <section id="admin-sales-section" class="hidden">
+          <p class="subtitle">Explora ventas del usuario seleccionado.</p>
+          <p id="admin-sales-feedback" class="feedback" aria-live="polite"></p>
+          <button id="admin-sales-backup-btn" type="button" class="mode-btn-secondary backup-btn">Backup ventas</button>
+
+          <div class="products-filters">
+            <div class="products-filter-group">
+              <label for="admin-sales-search" class="users-filters-label">Buscar venta</label>
+              <input
+                id="admin-sales-search"
+                type="search"
+                placeholder="ID, cliente, vendedor o metodo de pago"
+                autocomplete="off"
+              >
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Fecha</th>
+                  <th>Cliente</th>
+                  <th>Vendedor</th>
+                  <th>Metodo pago</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody id="admin-sales-table-body">
+                <tr>
+                  <td colspan="6">Selecciona un usuario en Administrador para ver ventas.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="admin-cashboxes-section" class="hidden">
+          <p class="subtitle">Explora cajas del usuario seleccionado.</p>
+          <p id="admin-cashboxes-feedback" class="feedback" aria-live="polite"></p>
+          <button id="admin-cashboxes-backup-btn" type="button" class="mode-btn-secondary backup-btn">Backup caja</button>
+
+          <div class="products-filters">
+            <div class="products-filter-group">
+              <label for="admin-cashboxes-search" class="users-filters-label">Buscar caja</label>
+              <input
+                id="admin-cashboxes-search"
+                type="search"
+                placeholder="ID, responsable o estado"
+                autocomplete="off"
+              >
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Apertura</th>
+                  <th>Cierre</th>
+                  <th>Responsable</th>
+                  <th>Estado</th>
+                  <th>Cantidad ventas</th>
+                  <th>Saldo final</th>
+                </tr>
+              </thead>
+              <tbody id="admin-cashboxes-table-body">
+                <tr>
+                  <td colspan="7">Selecciona un usuario en Administrador para ver cajas.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <section id="admin-cashbox-detail-panel" class="cashbox-detail-panel">
+            <h3>Detalle de cierre</h3>
+            <p id="admin-cashbox-detail-feedback" class="subtitle">Haz click en una fila para ver el detalle completo.</p>
+            <pre id="admin-cashbox-detail-content" class="cashbox-detail-content">{}</pre>
+            <h4>Productos incluidos</h4>
+            <p id="admin-cashbox-products-feedback" class="subtitle">Sin productos seleccionados.</p>
+            <pre id="admin-cashbox-products-content" class="cashbox-detail-content">[]</pre>
+          </section>
+        </section>
+
+        <section id="admin-backups-section" class="hidden">
+          <p class="subtitle">Explora backups del usuario seleccionado.</p>
+          <p id="admin-backups-feedback" class="feedback" aria-live="polite"></p>
+
+          <div class="products-filters">
+            <div class="products-filter-group">
+              <label for="admin-backups-search" class="users-filters-label">Buscar backup</label>
+              <input
+                id="admin-backups-search"
+                type="search"
+                placeholder="Nombre archivo o usuario"
+                autocomplete="off"
+              >
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Archivo</th>
+                  <th>Usuario</th>
+                  <th>Fecha</th>
+                  <th>Tamanio</th>
+                  <th>Accion</th>
+                </tr>
+              </thead>
+              <tbody id="admin-backups-table-body">
+                <tr>
+                  <td colspan="5">Selecciona un usuario en Administrador para ver backups.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <section id="admin-backup-sales-panel" class="cashbox-detail-panel">
+            <h3>Ventas del backup</h3>
+            <p id="admin-backup-sales-feedback" class="subtitle">Selecciona un backup para ver sus ventas.</p>
+            <button id="admin-backup-download-btn" type="button" class="mode-btn-secondary backup-btn" disabled>Descargar backup seleccionado</button>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID venta</th>
+                    <th>Fecha</th>
+                    <th>Usuario</th>
+                    <th>Items</th>
+                    <th>Pago</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-backup-sales-table-body">
+                  <tr>
+                    <td colspan="6">Sin datos.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="admin-backup-import-panel" class="cashbox-detail-panel">
+            <h3>Cargar backup en otro usuario</h3>
+            <p class="subtitle">Selecciona usuario destino, tipo de datos y archivo para simular la carga.</p>
+            <p id="admin-import-backup-feedback" class="feedback" aria-live="polite"></p>
+
+            <div class="products-filters">
+              <div class="products-filter-group">
+                <label for="admin-import-target-user-select" class="users-filters-label">Usuario destino</label>
+                <select id="admin-import-target-user-select">
+                  <option value="">Selecciona un usuario...</option>
+                </select>
+              </div>
+
+              <div class="products-filter-group">
+                <label for="admin-import-backup-file" class="users-filters-label">Archivo backup (.json)</label>
+                <input id="admin-import-backup-file" type="file" accept="application/json,.json">
+              </div>
+
+              <div class="products-filter-group">
+                <label for="admin-import-backup-type" class="users-filters-label">Tipo a cargar</label>
+                <select id="admin-import-backup-type">
+                  <option value="sales">Ventas</option>
+                  <option value="cashboxes">Cajas</option>
+                  <option value="products">Productos</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>ID</th>
+                    <th>Tenant</th>
+                    <th>Resumen</th>
+                  </tr>
+                </thead>
+                <tbody id="admin-import-preview-table-body">
+                  <tr>
+                    <td colspan="4">Selecciona un archivo para simular la carga.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
         </section>
       </section>
 

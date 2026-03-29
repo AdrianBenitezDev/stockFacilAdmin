@@ -70,18 +70,21 @@ const logoutBtn = document.getElementById("admin-logout-btn");
 const refreshBtn = document.getElementById("admin-refresh-btn");
 const navUsersBtn = document.getElementById("admin-nav-users-btn");
 const navEmployeesBtn = document.getElementById("admin-nav-employees-btn");
-const navProductsBtn = document.getElementById("admin-nav-products-btn");
 const navPlansBtn = document.getElementById("admin-nav-plans-btn");
-const navSalesBtn = document.getElementById("admin-nav-sales-btn");
-const navCashboxesBtn = document.getElementById("admin-nav-cashboxes-btn");
-const navBackupsBtn = document.getElementById("admin-nav-backups-btn");
+const navManagerBtn = document.getElementById("admin-nav-manager-btn");
+const managerNavProductsBtn = document.getElementById("admin-manager-nav-products-btn");
+const managerNavSalesBtn = document.getElementById("admin-manager-nav-sales-btn");
+const managerNavCashboxesBtn = document.getElementById("admin-manager-nav-cashboxes-btn");
+const managerNavBackupsBtn = document.getElementById("admin-manager-nav-backups-btn");
 const usersSection = document.getElementById("admin-users-section");
 const employeesSection = document.getElementById("admin-employees-section");
 const plansSection = document.getElementById("admin-plans-section");
+const managerSection = document.getElementById("admin-manager-section");
 const productsSection = document.getElementById("admin-products-section");
 const salesSection = document.getElementById("admin-sales-section");
 const cashboxesSection = document.getElementById("admin-cashboxes-section");
 const backupsSection = document.getElementById("admin-backups-section");
+const managerUserSelect = document.getElementById("admin-manager-user-select");
 const usersSearchInput = document.getElementById("admin-users-search");
 const globalLoadingNode = document.getElementById("admin-global-loading");
 const globalToastNode = document.getElementById("admin-global-toast");
@@ -145,17 +148,14 @@ const TRIAL_CONTROL_INPUTS = [
 ].filter(Boolean);
 const planSaveBtn = document.getElementById("admin-plan-save-btn");
 const productsFeedbackNode = document.getElementById("admin-products-feedback");
-const productsUserSelect = document.getElementById("admin-products-user-select");
 const productsSearchInput = document.getElementById("admin-products-search");
 const productsTableBody = document.getElementById("admin-products-table-body");
 const productsBackupBtn = document.getElementById("admin-products-backup-btn");
 const salesFeedbackNode = document.getElementById("admin-sales-feedback");
-const salesUserSelect = document.getElementById("admin-sales-user-select");
 const salesSearchInput = document.getElementById("admin-sales-search");
 const salesTableBody = document.getElementById("admin-sales-table-body");
 const salesBackupBtn = document.getElementById("admin-sales-backup-btn");
 const cashboxesFeedbackNode = document.getElementById("admin-cashboxes-feedback");
-const cashboxesUserSelect = document.getElementById("admin-cashboxes-user-select");
 const cashboxesSearchInput = document.getElementById("admin-cashboxes-search");
 const cashboxesTableBody = document.getElementById("admin-cashboxes-table-body");
 const cashboxesBackupBtn = document.getElementById("admin-cashboxes-backup-btn");
@@ -164,7 +164,6 @@ const cashboxDetailContentNode = document.getElementById("admin-cashbox-detail-c
 const cashboxProductsFeedbackNode = document.getElementById("admin-cashbox-products-feedback");
 const cashboxProductsContentNode = document.getElementById("admin-cashbox-products-content");
 const backupsFeedbackNode = document.getElementById("admin-backups-feedback");
-const backupsUserSelect = document.getElementById("admin-backups-user-select");
 const backupsSearchInput = document.getElementById("admin-backups-search");
 const backupsTableBody = document.getElementById("admin-backups-table-body");
 const backupSalesFeedbackNode = document.getElementById("admin-backup-sales-feedback");
@@ -183,6 +182,9 @@ let allUserRows = [];
 let allPlans = [];
 let selectedPlanId = "";
 let activeSection = "users";
+let activeManagerSubsection = "products";
+let selectedManagerUserUid = "";
+let selectedManagerTenantId = "";
 let selectedUserUid = "";
 let selectedUserRow = null;
 let selectedEmployees = [];
@@ -224,8 +226,9 @@ let pendingGlobalLoads = 0;
 let globalToastTimeout = null;
 
 const ADMIN_CACHE_DB_NAME = "stockfacil-admin-cache";
-const ADMIN_CACHE_DB_VERSION = 3;
+const ADMIN_CACHE_DB_VERSION = 4;
 const CASHBOXES_CACHE_STORE = "cashboxes_by_tenant";
+const SECTION_ROWS_CACHE_STORE = "section_rows_by_tenant";
 const USER_DOCS_CACHE_STORE = "user_tenant_docs_by_uid";
 let adminCacheDbPromise = null;
 
@@ -243,23 +246,21 @@ async function init() {
   navUsersBtn?.addEventListener("click", () => setActiveSection("users"));
   navEmployeesBtn?.addEventListener("click", () => setActiveSection("employees"));
   navPlansBtn?.addEventListener("click", () => setActiveSection("plans"));
-  navProductsBtn?.addEventListener("click", () => setActiveSection("products"));
-  navSalesBtn?.addEventListener("click", () => setActiveSection("sales"));
-  navCashboxesBtn?.addEventListener("click", () => setActiveSection("cashboxes"));
-  navBackupsBtn?.addEventListener("click", () => setActiveSection("backups"));
+  navManagerBtn?.addEventListener("click", () => setActiveSection("manager"));
+  managerNavProductsBtn?.addEventListener("click", () => setActiveManagerSubsection("products"));
+  managerNavSalesBtn?.addEventListener("click", () => setActiveManagerSubsection("sales"));
+  managerNavCashboxesBtn?.addEventListener("click", () => setActiveManagerSubsection("cashboxes"));
+  managerNavBackupsBtn?.addEventListener("click", () => setActiveManagerSubsection("backups"));
+  managerUserSelect?.addEventListener("change", handleManagerUserSelectChange);
   usersSearchInput?.addEventListener("input", applyUsersFilter);
   employeesUserSelect?.addEventListener("change", handleEmployeesUserSelectChange);
-  productsUserSelect?.addEventListener("change", handleProductsUserSelectChange);
   productsSearchInput?.addEventListener("input", handleProductsSearchInput);
   productsBackupBtn?.addEventListener("click", handleProductsBackupClick);
-  salesUserSelect?.addEventListener("change", handleSalesUserSelectChange);
   salesSearchInput?.addEventListener("input", handleSalesSearchInput);
   salesBackupBtn?.addEventListener("click", handleSalesBackupClick);
-  cashboxesUserSelect?.addEventListener("change", handleCashboxesUserSelectChange);
   cashboxesSearchInput?.addEventListener("input", handleCashboxesSearchInput);
   cashboxesBackupBtn?.addEventListener("click", handleCashboxesBackupClick);
   cashboxesTableBody?.addEventListener("click", handleCashboxRowClick);
-  backupsUserSelect?.addEventListener("change", handleBackupsUserSelectChange);
   backupsSearchInput?.addEventListener("input", handleBackupsSearchInput);
   backupsTableBody?.addEventListener("click", handleBackupRowClick);
   backupDownloadBtn?.addEventListener("click", handleBackupDownloadClick);
@@ -326,20 +327,23 @@ async function handleRefresh() {
     await loadEmployeesForSelectedUser();
     return;
   }
-  if (activeSection === "products") {
-    await loadProductsForSelectedUser();
-    return;
-  }
-  if (activeSection === "sales") {
-    await loadSalesForSelectedUser();
-    return;
-  }
-  if (activeSection === "cashboxes") {
-    await loadCashboxesForSelectedUser({ forceRemote: true });
-    return;
-  }
-  if (activeSection === "backups") {
-    await loadBackupsForSelectedUser();
+  if (activeSection === "manager") {
+    if (activeManagerSubsection === "products") {
+      await loadProductsForSelectedUser({ forceRemote: true });
+      return;
+    }
+    if (activeManagerSubsection === "sales") {
+      await loadSalesForSelectedUser({ forceRemote: true });
+      return;
+    }
+    if (activeManagerSubsection === "cashboxes") {
+      await loadCashboxesForSelectedUser({ forceRemote: true });
+      return;
+    }
+    if (activeManagerSubsection === "backups") {
+      await loadBackupsForSelectedUser({ forceRemote: true });
+      return;
+    }
     return;
   }
   await loadOverview();
@@ -417,10 +421,8 @@ function renderOverview(payload) {
   );
   updateEstimatedRevenueMetric();
   renderEmployeesUserOptions();
-  renderProductsUserOptions();
-  renderSalesUserOptions();
-  renderCashboxesUserOptions();
-  renderBackupsUserOptions();
+  renderManagerUserOptions();
+  renderImportTargetUserOptions(getActiveScopedUsers());
   applyUsersFilter();
 }
 
@@ -609,156 +611,54 @@ function renderEmployeesUserOptions() {
   }
 }
 
-function renderProductsUserOptions() {
-  if (!productsUserSelect) return;
-
+function renderManagerUserOptions() {
   const activeUsers = getActiveScopedUsers();
-
-  const previousUserUid = selectedProductsUserUid;
-  const nextUserUid =
-    previousUserUid && activeUsers.some((item) => item.uid === previousUserUid)
-      ? previousUserUid
+  const previousUid = selectedManagerUserUid;
+  const nextUid =
+    previousUid && activeUsers.some((item) => item.uid === previousUid)
+      ? previousUid
       : activeUsers[0]?.uid || "";
-  const selectedUser = activeUsers.find((item) => item.uid === nextUserUid) || null;
+  const selectedUser = activeUsers.find((item) => item.uid === nextUid) || null;
 
-  selectedProductsUserUid = nextUserUid;
-  selectedProductsTenantId = selectedUser?.tenantId || "";
-  productsUserSelect.innerHTML =
-    `<option value="">Selecciona un usuario...</option>` +
-    activeUsers
-      .map(
-        (item) =>
-          `<option value="${escapeHtml(item.uid)}"${item.uid === selectedProductsUserUid ? " selected" : ""}>${escapeHtml(item.label)}</option>`
-      )
-      .join("");
-  productsUserSelect.disabled = activeUsers.length === 0;
+  selectedManagerUserUid = nextUid;
+  selectedManagerTenantId = selectedUser?.tenantId || "";
+  syncManagerSelectionToSectionTargets(selectedManagerUserUid, selectedManagerTenantId);
+
+  if (managerUserSelect) {
+    managerUserSelect.innerHTML =
+      `<option value="">Selecciona un usuario...</option>` +
+      activeUsers
+        .map(
+          (item) =>
+            `<option value="${escapeHtml(item.uid)}"${item.uid === selectedManagerUserUid ? " selected" : ""}>${escapeHtml(item.label)}</option>`
+        )
+        .join("");
+    managerUserSelect.disabled = activeUsers.length === 0;
+  }
 
   if (!activeUsers.length) {
     allProductRows = [];
-    setProductsPlaceholder("No hay usuarios activos para consultar productos.");
-    setProductsFeedback("");
-    syncBackupButtonsState();
-    return;
-  }
-
-  syncBackupButtonsState();
-  if (activeSection === "products") {
-    void loadProductsForSelectedUser();
-  }
-}
-
-function renderSalesUserOptions() {
-  if (!salesUserSelect) return;
-
-  const activeUsers = getActiveScopedUsers();
-  const previousUserUid = selectedSalesUserUid;
-  const nextUserUid =
-    previousUserUid && activeUsers.some((item) => item.uid === previousUserUid)
-      ? previousUserUid
-      : activeUsers[0]?.uid || "";
-  const selectedUser = activeUsers.find((item) => item.uid === nextUserUid) || null;
-
-  selectedSalesUserUid = nextUserUid;
-  selectedSalesTenantId = selectedUser?.tenantId || "";
-  salesUserSelect.innerHTML =
-    `<option value="">Selecciona un usuario...</option>` +
-    activeUsers
-      .map(
-        (item) =>
-          `<option value="${escapeHtml(item.uid)}"${item.uid === selectedSalesUserUid ? " selected" : ""}>${escapeHtml(item.label)}</option>`
-      )
-      .join("");
-  salesUserSelect.disabled = activeUsers.length === 0;
-
-  if (!activeUsers.length) {
     allSalesRows = [];
-    setSalesPlaceholder("No hay usuarios activos para consultar ventas.");
-    setSalesFeedback("");
-    syncBackupButtonsState();
-    return;
-  }
-
-  syncBackupButtonsState();
-  if (activeSection === "sales") {
-    void loadSalesForSelectedUser();
-  }
-}
-
-function renderCashboxesUserOptions() {
-  if (!cashboxesUserSelect) return;
-
-  const activeUsers = getActiveScopedUsers();
-  const previousUserUid = selectedCashboxesUserUid;
-  const nextUserUid =
-    previousUserUid && activeUsers.some((item) => item.uid === previousUserUid)
-      ? previousUserUid
-      : activeUsers[0]?.uid || "";
-  const selectedUser = activeUsers.find((item) => item.uid === nextUserUid) || null;
-
-  selectedCashboxesUserUid = nextUserUid;
-  selectedCashboxesTenantId = selectedUser?.tenantId || "";
-  cashboxesUserSelect.innerHTML =
-    `<option value="">Selecciona un usuario...</option>` +
-    activeUsers
-      .map(
-        (item) =>
-          `<option value="${escapeHtml(item.uid)}"${item.uid === selectedCashboxesUserUid ? " selected" : ""}>${escapeHtml(item.label)}</option>`
-      )
-      .join("");
-  cashboxesUserSelect.disabled = activeUsers.length === 0;
-
-  if (!activeUsers.length) {
     allCashboxesRows = [];
     allCashboxesSourceRows = [];
+    allBackupsRows = [];
     selectedCashboxRowKey = "";
     selectedCashboxRow = null;
-    renderSelectedCashboxDetail();
-    setCashboxesPlaceholder("No hay usuarios activos para consultar cajas.");
-    setCashboxesFeedback("");
-    syncBackupButtonsState();
-    return;
-  }
-
-  syncBackupButtonsState();
-  if (activeSection === "cashboxes") {
-    void loadCashboxesForSelectedUser();
-  }
-}
-
-function renderBackupsUserOptions() {
-  if (!backupsUserSelect) return;
-
-  const activeUsers = getActiveScopedUsers();
-  const previousUserUid = selectedBackupsUserUid;
-  const nextUserUid =
-    previousUserUid && activeUsers.some((item) => item.uid === previousUserUid)
-      ? previousUserUid
-      : activeUsers[0]?.uid || "";
-  const selectedUser = activeUsers.find((item) => item.uid === nextUserUid) || null;
-
-  selectedBackupsUserUid = nextUserUid;
-  selectedBackupsTenantId = selectedUser?.tenantId || "";
-  backupsUserSelect.innerHTML =
-    `<option value="">Selecciona un usuario...</option>` +
-    activeUsers
-      .map(
-        (item) =>
-          `<option value="${escapeHtml(item.uid)}"${item.uid === selectedBackupsUserUid ? " selected" : ""}>${escapeHtml(item.label)}</option>`
-      )
-      .join("");
-  backupsUserSelect.disabled = activeUsers.length === 0;
-  renderImportTargetUserOptions(activeUsers);
-
-  if (!activeUsers.length) {
-    allBackupsRows = [];
     selectedBackupRowPath = "";
     selectedBackupRow = null;
     importPreviewPayload = null;
     importPreviewRows = [];
     if (importBackupFileInput) importBackupFileInput.value = "";
+    renderSelectedCashboxDetail();
+    renderBackupSalesTable([]);
+    setProductsPlaceholder("No hay usuarios activos para consultar productos.");
+    setProductsFeedback("");
+    setSalesPlaceholder("No hay usuarios activos para consultar ventas.");
+    setSalesFeedback("");
+    setCashboxesPlaceholder("No hay usuarios activos para consultar cajas.");
+    setCashboxesFeedback("");
     setBackupsPlaceholder("No hay usuarios activos para consultar backups.");
     setBackupsFeedback("");
-    renderBackupSalesTable([]);
     setBackupSalesFeedback("Selecciona un backup para ver sus ventas.");
     setImportPreviewPlaceholder("Selecciona un archivo para simular la carga.");
     setImportBackupFeedback("Selecciona usuario destino, tipo y archivo para simular.");
@@ -767,8 +667,61 @@ function renderBackupsUserOptions() {
   }
 
   syncBackupButtonsState();
-  if (activeSection === "backups") {
-    void loadBackupsForSelectedUser();
+  if (activeSection === "manager") {
+    void loadManagerActiveSubsection();
+  }
+}
+
+function syncManagerSelectionToSectionTargets(uid, tenantId) {
+  const safeUid = String(uid || "").trim();
+  const safeTenantId = String(tenantId || "").trim();
+  selectedProductsUserUid = safeUid;
+  selectedProductsTenantId = safeTenantId;
+  selectedSalesUserUid = safeUid;
+  selectedSalesTenantId = safeTenantId;
+  selectedCashboxesUserUid = safeUid;
+  selectedCashboxesTenantId = safeTenantId;
+  selectedBackupsUserUid = safeUid;
+  selectedBackupsTenantId = safeTenantId;
+}
+
+function handleManagerUserSelectChange() {
+  const uid = String(managerUserSelect?.value || "").trim();
+  const row = getActiveScopedUsers().find((entry) => String(entry?.uid || "").trim() === uid) || null;
+  selectedManagerUserUid = uid;
+  selectedManagerTenantId = String(row?.tenantId || "").trim();
+  syncManagerSelectionToSectionTargets(selectedManagerUserUid, selectedManagerTenantId);
+  allProductRows = [];
+  allSalesRows = [];
+  allCashboxesRows = [];
+  allCashboxesSourceRows = [];
+  allBackupsRows = [];
+  selectedCashboxRowKey = "";
+  selectedCashboxRow = null;
+  selectedBackupRowPath = "";
+  selectedBackupRow = null;
+  renderSelectedCashboxDetail();
+  renderBackupSalesTable([]);
+  setBackupSalesFeedback("Selecciona un backup para ver sus ventas.");
+  syncBackupButtonsState();
+  void loadManagerActiveSubsection();
+}
+
+async function loadManagerActiveSubsection(options = {}) {
+  if (activeManagerSubsection === "products") {
+    await loadProductsForSelectedUser(options);
+    return;
+  }
+  if (activeManagerSubsection === "sales") {
+    await loadSalesForSelectedUser(options);
+    return;
+  }
+  if (activeManagerSubsection === "cashboxes") {
+    await loadCashboxesForSelectedUser(options);
+    return;
+  }
+  if (activeManagerSubsection === "backups") {
+    await loadBackupsForSelectedUser(options);
   }
 }
 
@@ -812,16 +765,6 @@ function handleEmployeesUserSelectChange() {
   void loadEmployeesForSelectedUser();
 }
 
-function handleProductsUserSelectChange() {
-  const uid = String(productsUserSelect?.value || "").trim();
-  const row = allUserRows.find((entry) => String(entry?.uid || "").trim() === uid);
-  selectedProductsUserUid = uid;
-  selectedProductsTenantId = String(row?.tenantId || "").trim();
-  allProductRows = [];
-  syncBackupButtonsState();
-  void loadProductsForSelectedUser();
-}
-
 function handleProductsSearchInput() {
   if (productsSearchDebounce) {
     clearTimeout(productsSearchDebounce);
@@ -831,49 +774,49 @@ function handleProductsSearchInput() {
   }, 300);
 }
 
-async function loadProductsForSelectedUser() {
+async function loadProductsForSelectedUser(options = {}) {
   if (!auth.currentUser) return;
   if (!selectedProductsTenantId) {
     allProductRows = [];
-    setProductsPlaceholder("Selecciona un usuario activo para ver productos.");
+    setProductsPlaceholder("Selecciona un usuario en Administrador para ver productos.");
     setProductsFeedback("");
     return;
   }
 
+  const forceRemote = options?.forceRemote === true;
   const requestId = ++latestProductsRequestId;
   const query = String(productsSearchInput?.value || "").trim();
-  setProductsFeedback("Buscando productos...");
+  setProductsFeedback(forceRemote ? "Actualizando productos desde Firebase..." : "Buscando productos...");
   if (productsTableBody) {
     productsTableBody.innerHTML = '<tr><td colspan="6">Cargando productos...</td></tr>';
   }
 
   try {
-    const token = await auth.currentUser.getIdToken(true);
-    const params = new URLSearchParams({
-      tenantId: selectedProductsTenantId
-    });
-    if (query) {
-      params.set("q", query);
+    let sourceRows = [];
+    let source = "cache";
+    if (!forceRemote) {
+      sourceRows = await getCachedSectionRows("products", selectedProductsTenantId);
     }
-
-    const response = await fetchWithLoading(`${getAdminProductsEndpoint()}?${params.toString()}`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    });
-
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok || !result.ok) {
-      throw new Error(result?.error || "No se pudieron cargar los productos.");
+    if (forceRemote || !sourceRows.length) {
+      sourceRows = await fetchProductsRowsByTenant(selectedProductsTenantId);
+      source = "remote";
+      await saveCachedSectionRows("products", selectedProductsTenantId, sourceRows);
     }
     if (requestId !== latestProductsRequestId) return;
 
-    allProductRows = normalizeProductRows(result?.products || result?.rows || []);
+    const normalizedRows = normalizeProductRows(sourceRows);
+    allProductRows = applyProductsQuery(normalizedRows, query);
     renderProductsTable(allProductRows);
+    if (!normalizedRows.length) {
+      setProductsPlaceholder("No hay productos para este usuario.");
+      setProductsFeedback("No hay productos para este usuario.");
+      return;
+    }
     setProductsFeedback(
       allProductRows.length
-        ? `${allProductRows.length} producto(s) encontrado(s).`
+        ? source === "cache"
+          ? `${allProductRows.length} producto(s) desde cache local.`
+          : `${allProductRows.length} producto(s) actualizados desde Firebase.`
         : "Sin coincidencias para la busqueda."
     );
   } catch (error) {
@@ -883,6 +826,36 @@ async function loadProductsForSelectedUser() {
     setProductsPlaceholder(error.message || "No se pudieron cargar productos.");
     setProductsFeedback(error.message || "No se pudieron cargar productos.");
   }
+}
+
+async function fetchProductsRowsByTenant(tenantId) {
+  if (!auth.currentUser) return [];
+  const token = await auth.currentUser.getIdToken(true);
+  const params = new URLSearchParams({
+    tenantId: String(tenantId || "").trim()
+  });
+  const response = await fetchWithLoading(`${getAdminProductsEndpoint()}?${params.toString()}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.ok) {
+    throw new Error(result?.error || "No se pudieron cargar los productos.");
+  }
+  return Array.isArray(result?.products || result?.rows) ? result.products || result.rows : [];
+}
+
+function applyProductsQuery(rows, query) {
+  const normalizedQuery = normalizeText(query);
+  if (!normalizedQuery) return Array.isArray(rows) ? rows : [];
+  return (Array.isArray(rows) ? rows : []).filter((row) => {
+    const blob = [row?.codigo, row?.nombre, row?.categoria]
+      .map((entry) => normalizeText(entry))
+      .join(" ");
+    return blob.includes(normalizedQuery);
+  });
 }
 
 function normalizeProductRows(source) {
@@ -934,16 +907,6 @@ function renderProductsTable(rows) {
     .join("");
 }
 
-function handleSalesUserSelectChange() {
-  const uid = String(salesUserSelect?.value || "").trim();
-  const row = allUserRows.find((entry) => String(entry?.uid || "").trim() === uid);
-  selectedSalesUserUid = uid;
-  selectedSalesTenantId = String(row?.tenantId || "").trim();
-  allSalesRows = [];
-  syncBackupButtonsState();
-  void loadSalesForSelectedUser();
-}
-
 function handleSalesSearchInput() {
   if (salesSearchDebounce) {
     clearTimeout(salesSearchDebounce);
@@ -953,48 +916,50 @@ function handleSalesSearchInput() {
   }, 300);
 }
 
-async function loadSalesForSelectedUser() {
+async function loadSalesForSelectedUser(options = {}) {
   if (!auth.currentUser) return;
   if (!selectedSalesTenantId) {
     allSalesRows = [];
-    setSalesPlaceholder("Selecciona un usuario activo para ver ventas.");
+    setSalesPlaceholder("Selecciona un usuario en Administrador para ver ventas.");
     setSalesFeedback("");
     return;
   }
 
+  const forceRemote = options?.forceRemote === true;
   const requestId = ++latestSalesRequestId;
   const query = String(salesSearchInput?.value || "").trim();
-  setSalesFeedback("Buscando ventas...");
+  setSalesFeedback(forceRemote ? "Actualizando ventas desde Firebase..." : "Buscando ventas...");
   if (salesTableBody) {
     salesTableBody.innerHTML = '<tr><td colspan="6">Cargando ventas...</td></tr>';
   }
 
   try {
-    const token = await auth.currentUser.getIdToken(true);
-    const params = new URLSearchParams({
-      tenantId: selectedSalesTenantId
-    });
-    if (query) {
-      params.set("q", query);
+    let sourceRows = [];
+    let source = "cache";
+    if (!forceRemote) {
+      sourceRows = await getCachedSectionRows("sales", selectedSalesTenantId);
     }
-
-    const response = await fetchWithLoading(`${getAdminSalesEndpoint()}?${params.toString()}`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    });
-
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok || !result.ok) {
-      throw new Error(result?.error || "No se pudieron cargar las ventas.");
+    if (forceRemote || !sourceRows.length) {
+      sourceRows = await fetchSalesRowsByTenant(selectedSalesTenantId);
+      source = "remote";
+      await saveCachedSectionRows("sales", selectedSalesTenantId, sourceRows);
     }
     if (requestId !== latestSalesRequestId) return;
 
-    allSalesRows = normalizeSalesRows(result?.sales || result?.rows || []);
+    const normalizedRows = normalizeSalesRows(sourceRows);
+    allSalesRows = applySalesQuery(normalizedRows, query);
     renderSalesTable(allSalesRows);
+    if (!normalizedRows.length) {
+      setSalesPlaceholder("No hay ventas para este usuario.");
+      setSalesFeedback("No hay ventas para este usuario.");
+      return;
+    }
     setSalesFeedback(
-      allSalesRows.length ? `${allSalesRows.length} venta(s) encontrada(s).` : "Sin coincidencias para la busqueda."
+      allSalesRows.length
+        ? source === "cache"
+          ? `${allSalesRows.length} venta(s) desde cache local.`
+          : `${allSalesRows.length} venta(s) actualizada(s) desde Firebase.`
+        : "Sin coincidencias para la busqueda."
     );
   } catch (error) {
     console.error(error);
@@ -1003,6 +968,37 @@ async function loadSalesForSelectedUser() {
     setSalesPlaceholder(error.message || "No se pudieron cargar las ventas.");
     setSalesFeedback(error.message || "No se pudieron cargar las ventas.");
   }
+}
+
+async function fetchSalesRowsByTenant(tenantId) {
+  if (!auth.currentUser) return [];
+  const token = await auth.currentUser.getIdToken(true);
+  const params = new URLSearchParams({
+    tenantId: String(tenantId || "").trim()
+  });
+  const response = await fetchWithLoading(`${getAdminSalesEndpoint()}?${params.toString()}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.ok) {
+    throw new Error(result?.error || "No se pudieron cargar las ventas.");
+  }
+  return Array.isArray(result?.sales || result?.rows) ? result.sales || result.rows : [];
+}
+
+function applySalesQuery(rows, query) {
+  const normalizedQuery = normalizeText(query);
+  if (!normalizedQuery) return Array.isArray(rows) ? rows : [];
+  return (Array.isArray(rows) ? rows : []).filter((row) => {
+    const blob = [row?.id, row?.cliente, row?.vendedor, row?.metodoPago]
+      .map((entry) => normalizeText(entry))
+      .join(" ");
+    return blob.includes(normalizedQuery);
+  });
 }
 
 function normalizeSalesRows(source) {
@@ -1053,20 +1049,6 @@ function renderSalesTable(rows) {
     .join("");
 }
 
-function handleCashboxesUserSelectChange() {
-  const uid = String(cashboxesUserSelect?.value || "").trim();
-  const row = allUserRows.find((entry) => String(entry?.uid || "").trim() === uid);
-  selectedCashboxesUserUid = uid;
-  selectedCashboxesTenantId = String(row?.tenantId || "").trim();
-  allCashboxesRows = [];
-  allCashboxesSourceRows = [];
-  selectedCashboxRowKey = "";
-  selectedCashboxRow = null;
-  renderSelectedCashboxDetail();
-  syncBackupButtonsState();
-  void loadCashboxesForSelectedUser();
-}
-
 async function handleProductsBackupClick() {
   await runSectionBackupDownload({
     tenantId: selectedProductsTenantId,
@@ -1113,20 +1095,6 @@ function handleCashboxesSearchInput() {
   cashboxesSearchDebounce = setTimeout(() => {
     void loadCashboxesForSelectedUser();
   }, 300);
-}
-
-function handleBackupsUserSelectChange() {
-  const uid = String(backupsUserSelect?.value || "").trim();
-  const row = allUserRows.find((entry) => String(entry?.uid || "").trim() === uid);
-  selectedBackupsUserUid = uid;
-  selectedBackupsTenantId = String(row?.tenantId || "").trim();
-  allBackupsRows = [];
-  selectedBackupRowPath = "";
-  selectedBackupRow = null;
-  renderBackupSalesTable([]);
-  setBackupSalesFeedback("Selecciona un backup para ver sus ventas.");
-  syncBackupButtonsState();
-  void loadBackupsForSelectedUser();
 }
 
 function handleBackupsSearchInput() {
@@ -1459,7 +1427,7 @@ async function loadCashboxesForSelectedUser(options = {}) {
     selectedCashboxRowKey = "";
     selectedCashboxRow = null;
     renderSelectedCashboxDetail();
-    setCashboxesPlaceholder("Selecciona un usuario activo para ver cajas.");
+    setCashboxesPlaceholder("Selecciona un usuario en Administrador para ver cajas.");
     setCashboxesFeedback("");
     return;
   }
@@ -1474,28 +1442,14 @@ async function loadCashboxesForSelectedUser(options = {}) {
 
   try {
     let sourceRows = [];
-    if (forceRemote) {
-      const token = await auth.currentUser.getIdToken(true);
-      const params = new URLSearchParams({
-        tenantId: selectedCashboxesTenantId
-      });
-      const response = await fetchWithLoading(`${getAdminCashboxesEndpoint()}?${params.toString()}`, {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result.ok) {
-        throw new Error(result?.error || "No se pudieron cargar las cajas.");
-      }
-      sourceRows = Array.isArray(result?.cashboxes || result?.rows)
-        ? result.cashboxes || result.rows
-        : [];
-      await saveCachedCashboxesRows(selectedCashboxesTenantId, sourceRows);
-    } else {
+    let source = "cache";
+    if (!forceRemote) {
       sourceRows = await getCachedCashboxesRows(selectedCashboxesTenantId);
+    }
+    if (forceRemote || !sourceRows.length) {
+      sourceRows = await fetchCashboxesRowsByTenant(selectedCashboxesTenantId);
+      source = "remote";
+      await saveCachedCashboxesRows(selectedCashboxesTenantId, sourceRows);
     }
     if (requestId !== latestCashboxesRequestId) return;
 
@@ -1504,12 +1458,8 @@ async function loadCashboxesForSelectedUser(options = {}) {
     renderCashboxesTable(allCashboxesRows);
 
     if (!allCashboxesSourceRows.length) {
-      setCashboxesPlaceholder(
-        forceRemote
-          ? "No hay cajas para este usuario."
-          : "No hay cajas en cache local. Presiona Actualizar para consultar Firebase."
-      );
-      setCashboxesFeedback(forceRemote ? "No hay cajas para este usuario." : "Cache vacia para este usuario.");
+      setCashboxesPlaceholder("No hay cajas para este usuario.");
+      setCashboxesFeedback("No hay cajas para este usuario.");
       selectedCashboxRowKey = "";
       selectedCashboxRow = null;
       renderSelectedCashboxDetail();
@@ -1533,9 +1483,11 @@ async function loadCashboxesForSelectedUser(options = {}) {
     }
     renderSelectedCashboxDetail();
     setCashboxesFeedback(
-      forceRemote
-        ? `${allCashboxesRows.length} caja(s) actualizada(s) desde Firebase.`
-        : `${allCashboxesRows.length} caja(s) desde cache local.`
+      allCashboxesRows.length
+        ? source === "cache"
+          ? `${allCashboxesRows.length} caja(s) desde cache local.`
+          : `${allCashboxesRows.length} caja(s) actualizada(s) desde Firebase.`
+        : "Sin coincidencias para la busqueda."
     );
   } catch (error) {
     console.error(error);
@@ -1550,13 +1502,33 @@ async function loadCashboxesForSelectedUser(options = {}) {
   }
 }
 
-async function loadBackupsForSelectedUser() {
+async function fetchCashboxesRowsByTenant(tenantId) {
+  if (!auth.currentUser) return [];
+  const token = await auth.currentUser.getIdToken(true);
+  const params = new URLSearchParams({
+    tenantId: String(tenantId || "").trim()
+  });
+  const response = await fetchWithLoading(`${getAdminCashboxesEndpoint()}?${params.toString()}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.ok) {
+    throw new Error(result?.error || "No se pudieron cargar las cajas.");
+  }
+  return Array.isArray(result?.cashboxes || result?.rows) ? result.cashboxes || result.rows : [];
+}
+
+async function loadBackupsForSelectedUser(options = {}) {
   if (!auth.currentUser) return;
   if (!selectedBackupsTenantId) {
     allBackupsRows = [];
     selectedBackupRowPath = "";
     selectedBackupRow = null;
-    setBackupsPlaceholder("Selecciona un usuario activo para ver backups.");
+    setBackupsPlaceholder("Selecciona un usuario en Administrador para ver backups.");
     setBackupsFeedback("");
     renderBackupSalesTable([]);
     setBackupSalesFeedback("Selecciona un backup para ver sus ventas.");
@@ -1564,42 +1536,44 @@ async function loadBackupsForSelectedUser() {
     return;
   }
 
+  const forceRemote = options?.forceRemote === true;
   const requestId = ++latestBackupsRequestId;
   const query = String(backupsSearchInput?.value || "").trim();
-  setBackupsFeedback("Buscando backups...");
+  setBackupsFeedback(forceRemote ? "Actualizando backups desde Firebase..." : "Buscando backups...");
   if (backupsTableBody) {
     backupsTableBody.innerHTML = '<tr><td colspan="5">Cargando backups...</td></tr>';
   }
 
   try {
-    const token = await auth.currentUser.getIdToken(true);
-    const params = new URLSearchParams({
-      tenantId: selectedBackupsTenantId
-    });
-    if (query) {
-      params.set("q", query);
+    let sourceRows = [];
+    let source = "cache";
+    if (!forceRemote) {
+      sourceRows = await getCachedSectionRows("backups", selectedBackupsTenantId);
     }
-
-    const response = await fetchWithLoading(`${getAdminBackupsEndpoint()}?${params.toString()}`, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    });
-
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok || !result.ok) {
-      throw new Error(result?.error || "No se pudieron cargar los backups.");
+    if (forceRemote || !sourceRows.length) {
+      sourceRows = await fetchBackupsRowsByTenant(selectedBackupsTenantId);
+      source = "remote";
+      await saveCachedSectionRows("backups", selectedBackupsTenantId, sourceRows);
     }
     if (requestId !== latestBackupsRequestId) return;
 
-    allBackupsRows = normalizeBackupRows(result?.backups || result?.rows || []);
+    const normalizedRows = normalizeBackupRows(sourceRows);
+    allBackupsRows = applyBackupsQuery(normalizedRows, query);
     renderBackupsTable(allBackupsRows);
-    setBackupsFeedback(
-      allBackupsRows.length
-        ? `${allBackupsRows.length} backup(s) encontrado(s).`
-        : "Sin backups para este usuario."
-    );
+    if (!normalizedRows.length) {
+      setBackupsPlaceholder("No hay backups para este usuario.");
+      setBackupsFeedback("No hay backups para este usuario.");
+    } else {
+      setBackupsFeedback(
+        allBackupsRows.length
+          ? source === "cache"
+            ? `${allBackupsRows.length} backup(s) desde cache local.`
+            : `${allBackupsRows.length} backup(s) actualizados desde Firebase.`
+          : query
+            ? "Sin coincidencias para la busqueda."
+            : "Sin backups para este usuario."
+      );
+    }
 
     if (selectedBackupRowPath) {
       selectedBackupRow =
@@ -1625,6 +1599,26 @@ async function loadBackupsForSelectedUser() {
   }
 }
 
+async function fetchBackupsRowsByTenant(tenantId) {
+  if (!auth.currentUser) return [];
+  const token = await auth.currentUser.getIdToken(true);
+  const params = new URLSearchParams({
+    tenantId: String(tenantId || "").trim()
+  });
+  const response = await fetchWithLoading(`${getAdminBackupsEndpoint()}?${params.toString()}`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result.ok) {
+    throw new Error(result?.error || "No se pudieron cargar los backups.");
+  }
+  return Array.isArray(result?.backups || result?.rows) ? result.backups || result.rows : [];
+}
+
 function normalizeBackupRows(source) {
   if (!Array.isArray(source)) return [];
   return source
@@ -1647,6 +1641,17 @@ function normalizeBackupRows(source) {
     })
     .filter((row) => Boolean(row.path))
     .sort((a, b) => Number(b.createdAtTs || 0) - Number(a.createdAtTs || 0));
+}
+
+function applyBackupsQuery(rows, query) {
+  const normalizedQuery = normalizeText(query);
+  if (!normalizedQuery) return Array.isArray(rows) ? rows : [];
+  return (Array.isArray(rows) ? rows : []).filter((row) => {
+    const blob = [row?.nombreArchivo, row?.usuario, row?.path]
+      .map((entry) => normalizeText(entry))
+      .join(" ");
+    return blob.includes(normalizedQuery);
+  });
 }
 
 function renderBackupsTable(rows) {
@@ -2372,6 +2377,10 @@ function showLoggedOutState() {
   allUserRows = [];
   allPlans = [];
   selectedPlanId = "";
+  activeSection = "users";
+  activeManagerSubsection = "products";
+  selectedManagerUserUid = "";
+  selectedManagerTenantId = "";
   selectedUserUid = "";
   selectedUserRow = null;
   selectedEmployees = [];
@@ -2425,25 +2434,13 @@ function showLoggedOutState() {
   tableBody.innerHTML = '<tr><td colspan="11">Sin datos.</td></tr>';
   if (metricEstimatedRevenue) metricEstimatedRevenue.textContent = "$0,00 / mes";
   if (planCardsNode) planCardsNode.innerHTML = "";
-  if (productsUserSelect) {
-    productsUserSelect.innerHTML = '<option value="">Selecciona un usuario...</option>';
-    productsUserSelect.disabled = true;
-  }
   if (employeesUserSelect) {
     employeesUserSelect.innerHTML = '<option value="">Selecciona un usuario...</option>';
     employeesUserSelect.disabled = true;
   }
-  if (salesUserSelect) {
-    salesUserSelect.innerHTML = '<option value="">Selecciona un usuario...</option>';
-    salesUserSelect.disabled = true;
-  }
-  if (cashboxesUserSelect) {
-    cashboxesUserSelect.innerHTML = '<option value="">Selecciona un usuario...</option>';
-    cashboxesUserSelect.disabled = true;
-  }
-  if (backupsUserSelect) {
-    backupsUserSelect.innerHTML = '<option value="">Selecciona un usuario...</option>';
-    backupsUserSelect.disabled = true;
+  if (managerUserSelect) {
+    managerUserSelect.innerHTML = '<option value="">Selecciona un usuario...</option>';
+    managerUserSelect.disabled = true;
   }
   if (importTargetUserSelect) {
     importTargetUserSelect.innerHTML = '<option value="">Selecciona un usuario...</option>';
@@ -2461,14 +2458,14 @@ function showLoggedOutState() {
     importBackupFileInput.value = "";
   }
   syncBackupButtonsState();
-  setProductsPlaceholder("Selecciona un usuario activo para ver productos.");
+  setProductsPlaceholder("Selecciona un usuario en Administrador para ver productos.");
   setProductsFeedback("");
-  setSalesPlaceholder("Selecciona un usuario activo para ver ventas.");
+  setSalesPlaceholder("Selecciona un usuario en Administrador para ver ventas.");
   setSalesFeedback("");
-  setCashboxesPlaceholder("Selecciona un usuario activo para ver cajas.");
+  setCashboxesPlaceholder("Selecciona un usuario en Administrador para ver cajas.");
   setCashboxesFeedback("");
   renderSelectedCashboxDetail();
-  setBackupsPlaceholder("Selecciona un usuario activo para ver backups.");
+  setBackupsPlaceholder("Selecciona un usuario en Administrador para ver backups.");
   setBackupsFeedback("");
   setBackupSalesFeedback("Selecciona un backup para ver sus ventas.");
   setImportBackupFeedback("Selecciona usuario destino, tipo y archivo para simular.");
@@ -2513,42 +2510,44 @@ function showLoggedInState() {
 function setActiveSection(sectionId) {
   activeSection = sectionId === "plans" ? "plans" : "users";
   activeSection = sectionId === "employees" ? "employees" : activeSection;
-  activeSection = sectionId === "products" ? "products" : activeSection;
-  activeSection = sectionId === "sales" ? "sales" : activeSection;
-  activeSection = sectionId === "cashboxes" ? "cashboxes" : activeSection;
-  activeSection = sectionId === "backups" ? "backups" : activeSection;
+  activeSection = sectionId === "manager" ? "manager" : activeSection;
 
   usersSection?.classList.toggle("hidden", activeSection !== "users");
   employeesSection?.classList.toggle("hidden", activeSection !== "employees");
   plansSection?.classList.toggle("hidden", activeSection !== "plans");
-  productsSection?.classList.toggle("hidden", activeSection !== "products");
-  salesSection?.classList.toggle("hidden", activeSection !== "sales");
-  cashboxesSection?.classList.toggle("hidden", activeSection !== "cashboxes");
-  backupsSection?.classList.toggle("hidden", activeSection !== "backups");
-
+  managerSection?.classList.toggle("hidden", activeSection !== "manager");
 
   navUsersBtn?.classList.toggle("is-active", activeSection === "users");
   navEmployeesBtn?.classList.toggle("is-active", activeSection === "employees");
   navPlansBtn?.classList.toggle("is-active", activeSection === "plans");
-  navProductsBtn?.classList.toggle("is-active", activeSection === "products");
-  navSalesBtn?.classList.toggle("is-active", activeSection === "sales");
-  navCashboxesBtn?.classList.toggle("is-active", activeSection === "cashboxes");
-  navBackupsBtn?.classList.toggle("is-active", activeSection === "backups");
+  navManagerBtn?.classList.toggle("is-active", activeSection === "manager");
 
   if (activeSection === "employees" && selectedEmployeesTenantId) {
     void loadEmployeesForSelectedUser();
   }
-  if (activeSection === "products" && selectedProductsTenantId) {
-    void loadProductsForSelectedUser();
+  if (activeSection === "manager") {
+    setActiveManagerSubsection(activeManagerSubsection);
   }
-  if (activeSection === "sales" && selectedSalesTenantId) {
-    void loadSalesForSelectedUser();
-  }
-  if (activeSection === "cashboxes" && selectedCashboxesTenantId) {
-    void loadCashboxesForSelectedUser();
-  }
-  if (activeSection === "backups" && selectedBackupsTenantId) {
-    void loadBackupsForSelectedUser();
+  syncBackupButtonsState();
+}
+
+function setActiveManagerSubsection(subsectionId) {
+  activeManagerSubsection = subsectionId === "sales" ? "sales" : "products";
+  activeManagerSubsection = subsectionId === "cashboxes" ? "cashboxes" : activeManagerSubsection;
+  activeManagerSubsection = subsectionId === "backups" ? "backups" : activeManagerSubsection;
+
+  productsSection?.classList.toggle("hidden", activeManagerSubsection !== "products");
+  salesSection?.classList.toggle("hidden", activeManagerSubsection !== "sales");
+  cashboxesSection?.classList.toggle("hidden", activeManagerSubsection !== "cashboxes");
+  backupsSection?.classList.toggle("hidden", activeManagerSubsection !== "backups");
+
+  managerNavProductsBtn?.classList.toggle("is-active", activeManagerSubsection === "products");
+  managerNavSalesBtn?.classList.toggle("is-active", activeManagerSubsection === "sales");
+  managerNavCashboxesBtn?.classList.toggle("is-active", activeManagerSubsection === "cashboxes");
+  managerNavBackupsBtn?.classList.toggle("is-active", activeManagerSubsection === "backups");
+
+  if (activeSection === "manager") {
+    void loadManagerActiveSubsection();
   }
   syncBackupButtonsState();
 }
@@ -2563,6 +2562,9 @@ function openAdminCacheDb() {
       const db = request.result;
       if (!db.objectStoreNames.contains(CASHBOXES_CACHE_STORE)) {
         db.createObjectStore(CASHBOXES_CACHE_STORE, { keyPath: "tenantId" });
+      }
+      if (!db.objectStoreNames.contains(SECTION_ROWS_CACHE_STORE)) {
+        db.createObjectStore(SECTION_ROWS_CACHE_STORE, { keyPath: "cacheKey" });
       }
       if (!db.objectStoreNames.contains(USER_DOCS_CACHE_STORE)) {
         db.createObjectStore(USER_DOCS_CACHE_STORE, { keyPath: "uid" });
@@ -2610,6 +2612,57 @@ async function saveCachedCashboxesRows(tenantId, rows) {
       const store = tx.objectStore(CASHBOXES_CACHE_STORE);
       store.put({
         tenantId: String(tenantId || "").trim(),
+        rows: Array.isArray(rows) ? rows : [],
+        updatedAt: Date.now()
+      });
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+      tx.onabort = () => resolve(false);
+    });
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function getSectionTenantCacheKey(sectionId, tenantId) {
+  return `${String(sectionId || "").trim()}::${String(tenantId || "").trim()}`;
+}
+
+async function getCachedSectionRows(sectionId, tenantId) {
+  try {
+    const db = await openAdminCacheDb();
+    const safeSectionId = String(sectionId || "").trim();
+    const safeTenantId = String(tenantId || "").trim();
+    if (!db || !safeSectionId || !safeTenantId) return [];
+    return await new Promise((resolve) => {
+      const tx = db.transaction(SECTION_ROWS_CACHE_STORE, "readonly");
+      const store = tx.objectStore(SECTION_ROWS_CACHE_STORE);
+      const request = store.get(getSectionTenantCacheKey(safeSectionId, safeTenantId));
+      request.onsuccess = () => {
+        const rows = Array.isArray(request.result?.rows) ? request.result.rows : [];
+        resolve(rows);
+      };
+      request.onerror = () => resolve([]);
+    });
+  } catch (error) {
+    console.error(error);
+    return [];
+  }
+}
+
+async function saveCachedSectionRows(sectionId, tenantId, rows) {
+  try {
+    const db = await openAdminCacheDb();
+    const safeSectionId = String(sectionId || "").trim();
+    const safeTenantId = String(tenantId || "").trim();
+    if (!db || !safeSectionId || !safeTenantId) return;
+    await new Promise((resolve) => {
+      const tx = db.transaction(SECTION_ROWS_CACHE_STORE, "readwrite");
+      const store = tx.objectStore(SECTION_ROWS_CACHE_STORE);
+      store.put({
+        cacheKey: getSectionTenantCacheKey(safeSectionId, safeTenantId),
+        sectionId: safeSectionId,
+        tenantId: safeTenantId,
         rows: Array.isArray(rows) ? rows : [],
         updatedAt: Date.now()
       });
@@ -2767,7 +2820,8 @@ function syncBackupButtonsState() {
     importCancelBtn.disabled = !Boolean(getSelectedImportBackupFile()) && importPreviewRows.length === 0;
   }
   if (importFloatingActionsNode) {
-    importFloatingActionsNode.classList.toggle("hidden", activeSection !== "backups");
+    const showImportActions = activeSection === "manager" && activeManagerSubsection === "backups";
+    importFloatingActionsNode.classList.toggle("hidden", !showImportActions);
   }
 }
 
