@@ -331,6 +331,8 @@ button:hover {
 #admin-users-search,
 #admin-manager-user-select,
 #admin-employees-user-select,
+#admin-change-plan-user-select,
+#admin-change-plan-plan-select,
 #admin-products-search,
 #admin-sales-search,
 #admin-cashboxes-search,
@@ -350,6 +352,8 @@ button:hover {
 #admin-users-search:focus,
 #admin-manager-user-select:focus,
 #admin-employees-user-select:focus,
+#admin-change-plan-user-select:focus,
+#admin-change-plan-plan-select:focus,
 #admin-products-search:focus,
 #admin-sales-search:focus,
 #admin-cashboxes-search:focus,
@@ -387,6 +391,25 @@ button:hover {
 .manager-sub-nav {
   margin: 0;
   flex-wrap: wrap;
+}
+
+#admin-change-plan-save-btn {
+  margin-top: 0;
+}
+
+#admin-change-plan-current-meta {
+  margin-bottom: 0.5rem;
+}
+
+#admin-change-plan-preview {
+  margin-top: 0.75rem;
+  margin-bottom: 0;
+  padding: 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #334155;
+  white-space: pre-line;
 }
 
 .backup-btn {

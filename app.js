@@ -72,6 +72,7 @@ const navUsersBtn = document.getElementById("admin-nav-users-btn");
 const navEmployeesBtn = document.getElementById("admin-nav-employees-btn");
 const navPlansBtn = document.getElementById("admin-nav-plans-btn");
 const navManagerBtn = document.getElementById("admin-nav-manager-btn");
+const navChangePlanBtn = document.getElementById("admin-nav-change-plan-btn");
 const managerNavProductsBtn = document.getElementById("admin-manager-nav-products-btn");
 const managerNavSalesBtn = document.getElementById("admin-manager-nav-sales-btn");
 const managerNavCashboxesBtn = document.getElementById("admin-manager-nav-cashboxes-btn");
@@ -80,6 +81,7 @@ const usersSection = document.getElementById("admin-users-section");
 const employeesSection = document.getElementById("admin-employees-section");
 const plansSection = document.getElementById("admin-plans-section");
 const managerSection = document.getElementById("admin-manager-section");
+const changePlanSection = document.getElementById("admin-change-plan-section");
 const productsSection = document.getElementById("admin-products-section");
 const salesSection = document.getElementById("admin-sales-section");
 const cashboxesSection = document.getElementById("admin-cashboxes-section");
@@ -115,6 +117,12 @@ const metricEstimatedRevenue = document.getElementById("metric-estimated-revenue
 const plansFeedbackNode = document.getElementById("admin-plans-feedback");
 const seedStarterPlanBtn = document.getElementById("admin-seed-starter-plan-btn");
 const seedBusinessCatalogBtn = document.getElementById("admin-seed-business-catalog-btn");
+const changePlanFeedbackNode = document.getElementById("admin-change-plan-feedback");
+const changePlanCurrentMetaNode = document.getElementById("admin-change-plan-current-meta");
+const changePlanPreviewNode = document.getElementById("admin-change-plan-preview");
+const changePlanUserSelect = document.getElementById("admin-change-plan-user-select");
+const changePlanPlanSelect = document.getElementById("admin-change-plan-plan-select");
+const changePlanSaveBtn = document.getElementById("admin-change-plan-save-btn");
 const planCardsNode = document.getElementById("admin-plan-cards");
 const planForm = document.getElementById("admin-plan-form");
 const planIdInput = document.getElementById("admin-plan-id");
@@ -220,6 +228,10 @@ let selectedBackupRow = null;
 let selectedImportTargetUserUid = "";
 let selectedImportTargetTenantId = "";
 let selectedImportBackupType = "sales";
+let selectedChangePlanUserUid = "";
+let selectedChangePlanTenantId = "";
+let selectedChangePlanCurrentPlanId = "";
+let selectedChangePlanTargetPlanId = "";
 let importPreviewPayload = null;
 let importPreviewRows = [];
 let pendingGlobalLoads = 0;
@@ -247,11 +259,15 @@ async function init() {
   navEmployeesBtn?.addEventListener("click", () => setActiveSection("employees"));
   navPlansBtn?.addEventListener("click", () => setActiveSection("plans"));
   navManagerBtn?.addEventListener("click", () => setActiveSection("manager"));
+  navChangePlanBtn?.addEventListener("click", () => setActiveSection("change-plan"));
   managerNavProductsBtn?.addEventListener("click", () => setActiveManagerSubsection("products"));
   managerNavSalesBtn?.addEventListener("click", () => setActiveManagerSubsection("sales"));
   managerNavCashboxesBtn?.addEventListener("click", () => setActiveManagerSubsection("cashboxes"));
   managerNavBackupsBtn?.addEventListener("click", () => setActiveManagerSubsection("backups"));
   managerUserSelect?.addEventListener("change", handleManagerUserSelectChange);
+  changePlanUserSelect?.addEventListener("change", handleChangePlanUserSelectChange);
+  changePlanPlanSelect?.addEventListener("change", handleChangePlanPlanSelectChange);
+  changePlanSaveBtn?.addEventListener("click", () => void handleChangePlanSaveClick());
   usersSearchInput?.addEventListener("input", applyUsersFilter);
   employeesUserSelect?.addEventListener("change", handleEmployeesUserSelectChange);
   productsSearchInput?.addEventListener("input", handleProductsSearchInput);
@@ -346,6 +362,10 @@ async function handleRefresh() {
     }
     return;
   }
+  if (activeSection === "change-plan") {
+    await Promise.allSettled([loadOverview(), loadPlans()]);
+    return;
+  }
   await loadOverview();
 }
 
@@ -423,6 +443,7 @@ function renderOverview(payload) {
   renderEmployeesUserOptions();
   renderManagerUserOptions();
   renderImportTargetUserOptions(getActiveScopedUsers());
+  renderChangePlanUserOptions();
   applyUsersFilter();
 }
 
@@ -722,6 +743,377 @@ async function loadManagerActiveSubsection(options = {}) {
   }
   if (activeManagerSubsection === "backups") {
     await loadBackupsForSelectedUser(options);
+  }
+}
+
+function getChangePlanSelectableUsers() {
+  return allUserRows
+    .map((row) => {
+      const uid = String(row?.uid || "").trim();
+      const tenantId = String(row?.tenantId || "").trim();
+      const nombre = String(row?.nombre || "-").trim();
+      const negocio = String(row?.nombreNegocio || "-").trim();
+      const email = String(row?.email || "-").trim();
+      const estado = row?.activo === false ? "Inactivo" : "Activo";
+      const tenantLabel = tenantId ? `Tenant ${tenantId}` : "Sin tenant";
+      const currentPlanId = normalizePlanId(row?.planActual) || String(row?.planActual || "").trim().toLowerCase();
+      return {
+        uid,
+        tenantId,
+        nombre,
+        negocio,
+        email,
+        estado,
+        currentPlanId,
+        label: `${nombre} | ${negocio} | ${email} | ${estado} | ${tenantLabel}`
+      };
+    })
+    .filter((row) => Boolean(row.uid));
+}
+
+function getSelectedChangePlanUserRow() {
+  const uid = String(selectedChangePlanUserUid || "").trim();
+  if (!uid) return null;
+  return allUserRows.find((row) => String(row?.uid || "").trim() === uid) || null;
+}
+
+function resolvePlanDisplayName(planId) {
+  const normalizedId = normalizePlanId(planId) || String(planId || "").trim().toLowerCase();
+  if (!normalizedId) return "-";
+  const plan = allPlans.find((item) => item.id === normalizedId) || null;
+  if (!plan) return normalizedId;
+  const title = String(plan?.titulo || "").trim();
+  return title || normalizedId;
+}
+
+function renderChangePlanUserOptions() {
+  if (!changePlanUserSelect) return;
+
+  const users = getChangePlanSelectableUsers();
+  const previousUid = selectedChangePlanUserUid;
+  const nextUid =
+    previousUid && users.some((item) => item.uid === previousUid)
+      ? previousUid
+      : users[0]?.uid || "";
+  const selectedUser = users.find((item) => item.uid === nextUid) || null;
+
+  selectedChangePlanUserUid = nextUid;
+  selectedChangePlanTenantId = selectedUser?.tenantId || "";
+  selectedChangePlanCurrentPlanId = selectedUser?.currentPlanId || "";
+
+  changePlanUserSelect.innerHTML =
+    `<option value="">Selecciona un usuario...</option>` +
+    users
+      .map(
+        (item) =>
+          `<option value="${escapeHtml(item.uid)}"${item.uid === selectedChangePlanUserUid ? " selected" : ""}>${escapeHtml(item.label)}</option>`
+      )
+      .join("");
+  changePlanUserSelect.disabled = users.length === 0;
+
+  if (!users.length) {
+    selectedChangePlanUserUid = "";
+    selectedChangePlanTenantId = "";
+    selectedChangePlanCurrentPlanId = "";
+    selectedChangePlanTargetPlanId = "";
+    if (changePlanPlanSelect) {
+      changePlanPlanSelect.innerHTML = '<option value="">Selecciona un plan...</option>';
+      changePlanPlanSelect.disabled = true;
+    }
+    setChangePlanFeedback("");
+    if (changePlanCurrentMetaNode) {
+      changePlanCurrentMetaNode.textContent = "No hay usuarios para cambiar plan.";
+    }
+    if (changePlanPreviewNode) {
+      changePlanPreviewNode.textContent =
+        "Selecciona un plan diferente para ver los cambios que se aplicaran en Firebase.";
+    }
+    syncChangePlanSaveState();
+    return;
+  }
+
+  renderChangePlanPlanOptions();
+}
+
+function renderChangePlanPlanOptions() {
+  if (!changePlanPlanSelect) return;
+
+  const currentPlanId =
+    normalizePlanId(selectedChangePlanCurrentPlanId) ||
+    String(selectedChangePlanCurrentPlanId || "").trim().toLowerCase();
+  const activePlans = allPlans.filter((plan) => plan?.activo === true);
+  const options = activePlans.map((plan) => ({
+    id: plan.id,
+    title: plan.titulo || plan.id,
+    active: true
+  }));
+  if (currentPlanId && !options.some((plan) => plan.id === currentPlanId)) {
+    options.unshift({
+      id: currentPlanId,
+      title: `${resolvePlanDisplayName(currentPlanId)} (plan actual no activo)`,
+      active: false
+    });
+  }
+
+  const nextTargetPlanId =
+    selectedChangePlanTargetPlanId && options.some((plan) => plan.id === selectedChangePlanTargetPlanId)
+      ? selectedChangePlanTargetPlanId
+      : currentPlanId && options.some((plan) => plan.id === currentPlanId)
+        ? currentPlanId
+        : options[0]?.id || "";
+
+  selectedChangePlanTargetPlanId = nextTargetPlanId;
+
+  changePlanPlanSelect.innerHTML =
+    `<option value="">Selecciona un plan...</option>` +
+    options
+      .map(
+        (plan) =>
+          `<option value="${escapeHtml(plan.id)}"${plan.id === selectedChangePlanTargetPlanId ? " selected" : ""}>${escapeHtml(plan.title)}</option>`
+      )
+      .join("");
+  changePlanPlanSelect.disabled =
+    !selectedChangePlanUserUid || !selectedChangePlanTenantId || options.length === 0;
+
+  renderChangePlanCurrentMeta();
+  renderChangePlanPreview();
+  syncChangePlanSaveState();
+}
+
+function renderChangePlanCurrentMeta() {
+  if (!changePlanCurrentMetaNode) return;
+  const row = getSelectedChangePlanUserRow();
+  if (!row) {
+    changePlanCurrentMetaNode.textContent = "Selecciona un usuario para ver su plan actual.";
+    return;
+  }
+  const currentPlanId =
+    normalizePlanId(selectedChangePlanCurrentPlanId || row?.planActual) ||
+    String(selectedChangePlanCurrentPlanId || row?.planActual || "").trim().toLowerCase();
+  const currentPlanName = resolvePlanDisplayName(currentPlanId);
+  const nombre = String(row?.nombre || "-").trim();
+  const negocio = String(row?.nombreNegocio || "-").trim();
+  const tenantId = String(row?.tenantId || "").trim();
+  const tenantText = tenantId ? `Tenant: ${tenantId}` : "Sin tenant asignado";
+  changePlanCurrentMetaNode.textContent =
+    `Usuario: ${nombre} | Negocio: ${negocio} | ${tenantText} | Plan actual: ${currentPlanName} (${currentPlanId || "-"})`;
+}
+
+function buildChangePlanPreviewMessage() {
+  const row = getSelectedChangePlanUserRow();
+  if (!row || !selectedChangePlanUserUid) {
+    return "Selecciona un usuario para ver los cambios que se aplicaran en Firebase.";
+  }
+  if (!selectedChangePlanTenantId) {
+    return "El usuario seleccionado no tiene tenant asignado. No se puede cambiar plan.";
+  }
+
+  const currentPlanId =
+    normalizePlanId(selectedChangePlanCurrentPlanId || row?.planActual) ||
+    String(selectedChangePlanCurrentPlanId || row?.planActual || "").trim().toLowerCase();
+  const targetPlanId =
+    normalizePlanId(selectedChangePlanTargetPlanId || changePlanPlanSelect?.value || "") ||
+    String(selectedChangePlanTargetPlanId || changePlanPlanSelect?.value || "").trim().toLowerCase();
+
+  if (!targetPlanId || targetPlanId === currentPlanId) {
+    return "Selecciona un plan diferente para ver los cambios que se aplicaran en Firebase.";
+  }
+
+  const lines = [];
+  lines.push("Cambios que se aplicaran en Firebase:");
+  lines.push(`tenants/${selectedChangePlanTenantId}/planId: \"${currentPlanId || "-"}\" -> \"${targetPlanId}\"`);
+  lines.push(`tenants/${selectedChangePlanTenantId}/planActual: \"${currentPlanId || "-"}\" -> \"${targetPlanId}\"`);
+  lines.push(`adminManageAccounts/${selectedChangePlanUserUid}/planActual: \"${currentPlanId || "-"}\" -> \"${targetPlanId}\"`);
+
+  const targetPlan = allPlans.find((plan) => plan.id === targetPlanId) || null;
+  const trialControl =
+    targetPlan && targetPlan.id === TRIAL_PLAN_ID ? normalizeTrialControl(targetPlan?.trialControl) : null;
+  if (trialControl) {
+    lines.push(
+      `tenants/${selectedChangePlanTenantId}/trialControl/trialAccessAllowed: ${String(
+        Boolean(trialControl.trialAccessAllowed)
+      )}`
+    );
+    lines.push(
+      `tenants/${selectedChangePlanTenantId}/trialControl/trialWarningEnabled: ${String(
+        Boolean(trialControl.trialWarningEnabled)
+      )}`
+    );
+    lines.push(
+      `tenants/${selectedChangePlanTenantId}/trialControl/trialWarningText: \"${String(
+        trialControl.trialWarningText || ""
+      )}\"`
+    );
+    lines.push(
+      `tenants/${selectedChangePlanTenantId}/trialControl/trialWarningCtaLabel: \"${String(
+        trialControl.trialWarningCtaLabel || ""
+      )}\"`
+    );
+    lines.push(
+      `tenants/${selectedChangePlanTenantId}/trialControl/trialWarningCtaUrl: \"${String(
+        trialControl.trialWarningCtaUrl || ""
+      )}\"`
+    );
+  }
+
+  return lines.join("\n");
+}
+
+function renderChangePlanPreview() {
+  if (!changePlanPreviewNode) return;
+  changePlanPreviewNode.textContent = buildChangePlanPreviewMessage();
+}
+
+function syncChangePlanSaveState() {
+  if (!changePlanSaveBtn) return;
+  const currentPlanId =
+    normalizePlanId(selectedChangePlanCurrentPlanId) ||
+    String(selectedChangePlanCurrentPlanId || "").trim().toLowerCase();
+  const targetPlanId =
+    normalizePlanId(selectedChangePlanTargetPlanId || changePlanPlanSelect?.value || "") ||
+    String(selectedChangePlanTargetPlanId || changePlanPlanSelect?.value || "").trim().toLowerCase();
+  const canSave =
+    Boolean(selectedChangePlanUserUid) &&
+    Boolean(selectedChangePlanTenantId) &&
+    Boolean(targetPlanId) &&
+    targetPlanId !== currentPlanId;
+  changePlanSaveBtn.disabled = !canSave;
+}
+
+function setChangePlanFeedback(message) {
+  if (!changePlanFeedbackNode) return;
+  changePlanFeedbackNode.textContent = String(message || "");
+}
+
+function handleChangePlanUserSelectChange() {
+  const uid = String(changePlanUserSelect?.value || "").trim();
+  const selectedUser = getChangePlanSelectableUsers().find((item) => item.uid === uid) || null;
+  selectedChangePlanUserUid = uid;
+  selectedChangePlanTenantId = selectedUser?.tenantId || "";
+  selectedChangePlanCurrentPlanId = selectedUser?.currentPlanId || "";
+  selectedChangePlanTargetPlanId = "";
+  setChangePlanFeedback("");
+  renderChangePlanPlanOptions();
+}
+
+function handleChangePlanPlanSelectChange() {
+  selectedChangePlanTargetPlanId = normalizePlanId(changePlanPlanSelect?.value || "") || "";
+  setChangePlanFeedback("");
+  renderChangePlanPreview();
+  syncChangePlanSaveState();
+}
+
+async function handleChangePlanSaveClick() {
+  if (!auth.currentUser) return;
+  const row = getSelectedChangePlanUserRow();
+  const uid = String(selectedChangePlanUserUid || "").trim();
+  const tenantId = String(selectedChangePlanTenantId || "").trim();
+  const currentPlanId =
+    normalizePlanId(selectedChangePlanCurrentPlanId || row?.planActual) ||
+    String(selectedChangePlanCurrentPlanId || row?.planActual || "").trim().toLowerCase();
+  const targetPlanId =
+    normalizePlanId(selectedChangePlanTargetPlanId || changePlanPlanSelect?.value || "") ||
+    String(selectedChangePlanTargetPlanId || changePlanPlanSelect?.value || "").trim().toLowerCase();
+
+  if (!row || !uid || !tenantId) {
+    setChangePlanFeedback("Selecciona un usuario valido para cambiar plan.");
+    return;
+  }
+  if (!targetPlanId || targetPlanId === currentPlanId) {
+    setChangePlanFeedback("Selecciona un plan distinto al actual.");
+    return;
+  }
+
+  const targetPlanName = resolvePlanDisplayName(targetPlanId);
+  const confirmed = window.confirm(
+    `Vas a cambiar el plan de ${row?.nombre || "-"} (${row?.nombreNegocio || "-"}) a ${targetPlanName} (${targetPlanId}). Deseas continuar?`
+  );
+  if (!confirmed) return;
+
+  if (changePlanSaveBtn) changePlanSaveBtn.disabled = true;
+  setChangePlanFeedback("Guardando cambio de plan...");
+  try {
+    const token = await auth.currentUser.getIdToken(true);
+    const response = await fetchWithLoading(getAdminAccountsEndpoint(), {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        action: "update_user_plan",
+        targetType: "employer",
+        uid,
+        tenantId,
+        planId: targetPlanId,
+        planActual: targetPlanId
+      })
+    });
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      throw new Error(result?.error || "No se pudo cambiar el plan del usuario.");
+    }
+
+    const resolvedPlanId =
+      normalizePlanId(
+        result?.tenant?.planId || result?.tenant?.planActual || result?.employer?.planActual || targetPlanId
+      ) || targetPlanId;
+    const hasTrialControl =
+      typeof result?.tenant?.trialControl === "object" && result?.tenant?.trialControl !== null;
+
+    selectedChangePlanCurrentPlanId = resolvedPlanId;
+    selectedChangePlanTargetPlanId = resolvedPlanId;
+
+    allUserRows = allUserRows.map((userRow) => {
+      if (String(userRow?.uid || "").trim() !== uid) return userRow;
+      return {
+        ...userRow,
+        planActual: resolvedPlanId,
+        trialAccessAllowed: hasTrialControl
+          ? toTrialBoolean(result?.tenant?.trialControl?.trialAccessAllowed, userRow?.trialAccessAllowed)
+          : userRow?.trialAccessAllowed,
+        trialWarningEnabled: hasTrialControl
+          ? toTrialBoolean(result?.tenant?.trialControl?.trialWarningEnabled, userRow?.trialWarningEnabled)
+          : userRow?.trialWarningEnabled,
+        trialControlLoaded: hasTrialControl ? true : userRow?.trialControlLoaded
+      };
+    });
+
+    if (selectedUserRow && String(selectedUserRow?.uid || "").trim() === uid) {
+      selectedUserRow = {
+        ...selectedUserRow,
+        planActual: resolvedPlanId,
+        trialAccessAllowed: hasTrialControl
+          ? toTrialBoolean(
+              result?.tenant?.trialControl?.trialAccessAllowed,
+              selectedUserRow?.trialAccessAllowed
+            )
+          : selectedUserRow?.trialAccessAllowed,
+        trialWarningEnabled: hasTrialControl
+          ? toTrialBoolean(
+              result?.tenant?.trialControl?.trialWarningEnabled,
+              selectedUserRow?.trialWarningEnabled
+            )
+          : selectedUserRow?.trialWarningEnabled,
+        trialControlLoaded: hasTrialControl ? true : selectedUserRow?.trialControlLoaded
+      };
+      renderSelectedUserActions();
+    }
+
+    applyUsersFilter();
+    renderManagerUserOptions();
+    renderChangePlanUserOptions();
+    setChangePlanFeedback(
+      `Plan actualizado correctamente a ${resolvePlanDisplayName(resolvedPlanId)} (${resolvedPlanId}).`
+    );
+    showGlobalToast("Plan actualizado correctamente.");
+  } catch (error) {
+    console.error(error);
+    setChangePlanFeedback(error.message || "No se pudo cambiar el plan del usuario.");
+    showGlobalToast(error.message || "No se pudo cambiar el plan del usuario.", "error");
+  } finally {
+    syncChangePlanSaveState();
   }
 }
 
@@ -2139,6 +2531,7 @@ async function loadPlans() {
 
     allPlans = normalizePlans(result?.plans);
     renderPlanCards(allPlans);
+    renderChangePlanPlanOptions();
     updateEstimatedRevenueMetric();
     setPlansFeedback("");
     if (!allPlans.length) {
@@ -2281,6 +2674,7 @@ async function handlePlanSave(event) {
     allPlans.sort((a, b) => a.orden - b.orden);
     renderPlanCards(allPlans);
     selectPlan(updated.id);
+    renderChangePlanPlanOptions();
     setPlansFeedback("Cambios guardados correctamente.");
   } catch (error) {
     console.error(error);
@@ -2412,6 +2806,10 @@ function showLoggedOutState() {
   selectedImportTargetUserUid = "";
   selectedImportTargetTenantId = "";
   selectedImportBackupType = "sales";
+  selectedChangePlanUserUid = "";
+  selectedChangePlanTenantId = "";
+  selectedChangePlanCurrentPlanId = "";
+  selectedChangePlanTargetPlanId = "";
   importPreviewPayload = null;
   importPreviewRows = [];
   if (productsSearchDebounce) {
@@ -2442,6 +2840,14 @@ function showLoggedOutState() {
     managerUserSelect.innerHTML = '<option value="">Selecciona un usuario...</option>';
     managerUserSelect.disabled = true;
   }
+  if (changePlanUserSelect) {
+    changePlanUserSelect.innerHTML = '<option value="">Selecciona un usuario...</option>';
+    changePlanUserSelect.disabled = true;
+  }
+  if (changePlanPlanSelect) {
+    changePlanPlanSelect.innerHTML = '<option value="">Selecciona un plan...</option>';
+    changePlanPlanSelect.disabled = true;
+  }
   if (importTargetUserSelect) {
     importTargetUserSelect.innerHTML = '<option value="">Selecciona un usuario...</option>';
     importTargetUserSelect.disabled = true;
@@ -2471,6 +2877,15 @@ function showLoggedOutState() {
   setImportBackupFeedback("Selecciona usuario destino, tipo y archivo para simular.");
   setImportPreviewPlaceholder("Selecciona un archivo para simular la carga.");
   renderBackupSalesTable([]);
+  setChangePlanFeedback("");
+  if (changePlanCurrentMetaNode) {
+    changePlanCurrentMetaNode.textContent = "Selecciona un usuario para ver su plan actual.";
+  }
+  if (changePlanPreviewNode) {
+    changePlanPreviewNode.textContent =
+      "Selecciona un plan diferente para ver los cambios que se aplicaran en Firebase.";
+  }
+  if (changePlanSaveBtn) changePlanSaveBtn.disabled = true;
   resetTrialControlForm();
   toggleTrialControlEditor(false);
   if (userTrialAccessAllowedInput) userTrialAccessAllowedInput.checked = true;
@@ -2511,22 +2926,28 @@ function setActiveSection(sectionId) {
   activeSection = sectionId === "plans" ? "plans" : "users";
   activeSection = sectionId === "employees" ? "employees" : activeSection;
   activeSection = sectionId === "manager" ? "manager" : activeSection;
+  activeSection = sectionId === "change-plan" ? "change-plan" : activeSection;
 
   usersSection?.classList.toggle("hidden", activeSection !== "users");
   employeesSection?.classList.toggle("hidden", activeSection !== "employees");
   plansSection?.classList.toggle("hidden", activeSection !== "plans");
   managerSection?.classList.toggle("hidden", activeSection !== "manager");
+  changePlanSection?.classList.toggle("hidden", activeSection !== "change-plan");
 
   navUsersBtn?.classList.toggle("is-active", activeSection === "users");
   navEmployeesBtn?.classList.toggle("is-active", activeSection === "employees");
   navPlansBtn?.classList.toggle("is-active", activeSection === "plans");
   navManagerBtn?.classList.toggle("is-active", activeSection === "manager");
+  navChangePlanBtn?.classList.toggle("is-active", activeSection === "change-plan");
 
   if (activeSection === "employees" && selectedEmployeesTenantId) {
     void loadEmployeesForSelectedUser();
   }
   if (activeSection === "manager") {
     setActiveManagerSubsection(activeManagerSubsection);
+  }
+  if (activeSection === "change-plan") {
+    renderChangePlanUserOptions();
   }
   syncBackupButtonsState();
 }

@@ -43,6 +43,7 @@
         <button id="admin-nav-employees-btn" type="button" class="mode-btn-secondary">Empleados</button>
         <button id="admin-nav-plans-btn" type="button" class="mode-btn-secondary">Planes</button>
         <button id="admin-nav-manager-btn" type="button" class="mode-btn-secondary">Administrador</button>
+        <button id="admin-nav-change-plan-btn" type="button" class="mode-btn-secondary">Cambiar plan</button>
       </div>
 
       <section id="admin-users-section">
@@ -513,6 +514,35 @@
             </div>
           </section>
         </section>
+      </section>
+
+      <section id="admin-change-plan-section" class="hidden">
+        <p class="subtitle">Selecciona usuario y plan para actualizar la suscripcion.</p>
+        <p id="admin-change-plan-feedback" class="feedback" aria-live="polite"></p>
+
+        <div class="products-filters">
+          <div class="products-filter-group">
+            <label for="admin-change-plan-user-select" class="users-filters-label">Usuario</label>
+            <select id="admin-change-plan-user-select">
+              <option value="">Selecciona un usuario...</option>
+            </select>
+          </div>
+
+          <div class="products-filter-group">
+            <label for="admin-change-plan-plan-select" class="users-filters-label">Plan activo</label>
+            <select id="admin-change-plan-plan-select">
+              <option value="">Selecciona un plan...</option>
+            </select>
+          </div>
+        </div>
+
+        <p id="admin-change-plan-current-meta" class="subtitle">Selecciona un usuario para ver su plan actual.</p>
+        <button id="admin-change-plan-save-btn" type="button" class="mode-btn-secondary" disabled>
+          Guardar cambio de plan
+        </button>
+        <p id="admin-change-plan-preview" class="change-plan-preview subtitle">
+          Selecciona un plan diferente para ver los cambios que se aplicaran en Firebase.
+        </p>
       </section>
 
 
