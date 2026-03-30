@@ -786,7 +786,7 @@ function getChangePlanSelectableUsers() {
     email: row.email,
     estado: row.estado,
     currentPlanId: row.currentPlanId,
-    label: `${row.nombre} | ${row.negocio} | ${row.email} | ${row.estado} | ${row.tenantLabel}`
+    label: `${row.nombre} | ${row.negocio}`
   }));
 }
 
