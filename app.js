@@ -1631,6 +1631,7 @@ async function handleImportBackupByType(backupType) {
     setImportBackupFeedback(message);
     showGlobalToast(`${imported} registro(s) importado(s).`);
     clearImportPreviewState({ keepFeedback: true, keepFileInput: false });
+    await invalidateImportedTypeCache(resolvedType, selectedImportTargetTenantId);
     void refreshImportedSectionData(resolvedType, selectedImportTargetTenantId);
   } catch (error) {
     console.error(error);
@@ -1776,6 +1777,21 @@ async function refreshImportedSectionData(backupType, tenantId) {
   }
 }
 
+async function invalidateImportedTypeCache(backupType, tenantId) {
+  const normalizedType = normalizeBackupType(backupType);
+  const safeTenantId = String(tenantId || "").trim();
+  if (!normalizedType || !safeTenantId) return;
+
+  if (normalizedType === "cashboxes") {
+    await saveCachedCashboxesRows(safeTenantId, []);
+    return;
+  }
+
+  if (normalizedType === "products" || normalizedType === "sales" || normalizedType === "backups") {
+    await saveCachedSectionRows(normalizedType, safeTenantId, []);
+  }
+}
+
 function normalizeBackupType(value) {
   const normalized = String(value || "").trim().toLowerCase();
   if (!normalized) return "";
@@ -1853,14 +1869,19 @@ async function loadCashboxesForSelectedUser(options = {}) {
 
   try {
     let sourceRows = [];
-    let source = "cache";
-    if (!forceRemote) {
-      sourceRows = await getCachedCashboxesRows(selectedCashboxesTenantId);
-    }
-    if (forceRemote || !sourceRows.length) {
+    let source = "remote";
+    try {
       sourceRows = await fetchCashboxesRowsByTenant(selectedCashboxesTenantId);
-      source = "remote";
       await saveCachedCashboxesRows(selectedCashboxesTenantId, sourceRows);
+    } catch (remoteError) {
+      if (forceRemote) {
+        throw remoteError;
+      }
+      sourceRows = await getCachedCashboxesRows(selectedCashboxesTenantId);
+      if (!sourceRows.length) {
+        throw remoteError;
+      }
+      source = "cache";
     }
     if (requestId !== latestCashboxesRequestId) return;
 
