@@ -587,14 +587,45 @@ function getAdminImportBackupEndpoint() {
   return `https://us-central1-${projectId}.cloudfunctions.net/adminImportBackup`;
 }
 
-function getActiveScopedUsers() {
+function mapScopedUserRow(row) {
+  const uid = String(row?.uid || "").trim();
+  const tenantId = String(row?.tenantId || "").trim();
+  const nombre = String(row?.nombre || "-").trim();
+  const negocio = String(row?.nombreNegocio || "-").trim();
+  const email = String(row?.email || "-").trim();
+  const active = row?.activo !== false;
+  const estado = active ? "Activo" : "Inactivo";
+  const tenantLabel = tenantId ? `Tenant ${tenantId}` : "Sin tenant";
+  const currentPlanId = normalizePlanId(row?.planActual) || String(row?.planActual || "").trim().toLowerCase();
+  return {
+    uid,
+    tenantId,
+    nombre,
+    negocio,
+    email,
+    active,
+    estado,
+    tenantLabel,
+    currentPlanId
+  };
+}
+
+function getScopedUserRows(options = {}) {
+  const onlyActive = options?.onlyActive === true;
+  const requireTenant = options?.requireTenant === true;
   return allUserRows
-    .filter((row) => row?.activo !== false && String(row?.tenantId || "").trim())
-    .map((row) => ({
-      uid: String(row?.uid || "").trim(),
-      tenantId: String(row?.tenantId || "").trim(),
-      label: `${String(row?.nombre || "-").trim()} | ${String(row?.nombreNegocio || "-").trim()}`
-    }));
+    .map((row) => mapScopedUserRow(row))
+    .filter((row) => Boolean(row.uid))
+    .filter((row) => !onlyActive || row.active)
+    .filter((row) => !requireTenant || Boolean(row.tenantId));
+}
+
+function getActiveScopedUsers() {
+  return getScopedUserRows({ onlyActive: true, requireTenant: true }).map((row) => ({
+    uid: row.uid,
+    tenantId: row.tenantId,
+    label: `${row.nombre} | ${row.negocio}`
+  }));
 }
 
 function renderEmployeesUserOptions() {
@@ -747,28 +778,16 @@ async function loadManagerActiveSubsection(options = {}) {
 }
 
 function getChangePlanSelectableUsers() {
-  return allUserRows
-    .map((row) => {
-      const uid = String(row?.uid || "").trim();
-      const tenantId = String(row?.tenantId || "").trim();
-      const nombre = String(row?.nombre || "-").trim();
-      const negocio = String(row?.nombreNegocio || "-").trim();
-      const email = String(row?.email || "-").trim();
-      const estado = row?.activo === false ? "Inactivo" : "Activo";
-      const tenantLabel = tenantId ? `Tenant ${tenantId}` : "Sin tenant";
-      const currentPlanId = normalizePlanId(row?.planActual) || String(row?.planActual || "").trim().toLowerCase();
-      return {
-        uid,
-        tenantId,
-        nombre,
-        negocio,
-        email,
-        estado,
-        currentPlanId,
-        label: `${nombre} | ${negocio} | ${email} | ${estado} | ${tenantLabel}`
-      };
-    })
-    .filter((row) => Boolean(row.uid));
+  return getScopedUserRows().map((row) => ({
+    uid: row.uid,
+    tenantId: row.tenantId,
+    nombre: row.nombre,
+    negocio: row.negocio,
+    email: row.email,
+    estado: row.estado,
+    currentPlanId: row.currentPlanId,
+    label: `${row.nombre} | ${row.negocio} | ${row.email} | ${row.estado} | ${row.tenantLabel}`
+  }));
 }
 
 function getSelectedChangePlanUserRow() {
