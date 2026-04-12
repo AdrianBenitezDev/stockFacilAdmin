@@ -488,6 +488,26 @@ td {
   background: #fff1a8;
 }
 
+#admin-users-table-body td.user-row-actions-cell {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.user-row-trial-toggle {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  cursor: pointer;
+}
+
+.user-row-whatsapp-btn {
+  margin-top: 0;
+  padding: 0.4rem 0.65rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  line-height: 1.1;
+}
+
 #admin-cashboxes-table-body tr[data-cashbox-key] {
   cursor: pointer;
 }

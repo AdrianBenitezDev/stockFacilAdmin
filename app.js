@@ -16,6 +16,7 @@ const ALLOWED_ADMIN_EMAILS = new Set([
 ]);
 const TRIAL_PLAN_ID = "prueba";
 const STARTER_PLAN_ID = "starter";
+const USERS_TABLE_COLSPAN = 13;
 
 const STARTER_PLAN_SEED = Object.freeze({
   id: STARTER_PLAN_ID,
@@ -95,7 +96,6 @@ const tableBody = document.getElementById("admin-users-table-body");
 const userActionsPanel = document.getElementById("admin-user-actions-panel");
 const selectedUserMeta = document.getElementById("admin-selected-user-meta");
 const toggleUserStatusBtn = document.getElementById("admin-toggle-user-status-btn");
-const openWhatsappBtn = document.getElementById("admin-open-whatsapp-btn");
 const userTrialControlGroup = document.getElementById("admin-user-trial-control-group");
 const userTrialAccessAllowedInput = document.getElementById("admin-user-trial-access-allowed");
 const userTrialWarningEnabledInput = document.getElementById("admin-user-trial-warning-enabled");
@@ -285,7 +285,8 @@ async function init() {
   importBackupFileInput?.addEventListener("change", () => void handleImportBackupFileInputChange());
   importConfirmBtn?.addEventListener("click", () => void handleImportConfirmClick());
   importCancelBtn?.addEventListener("click", handleImportCancelClick);
-  tableBody?.addEventListener("click", handleUserRowClick);
+  tableBody?.addEventListener("click", handleUsersTableClick);
+  tableBody?.addEventListener("change", handleUsersTableChange);
   userDocOverlay?.addEventListener("click", handleUserDocOverlayClick);
   userDocOverlayRefreshBtn?.addEventListener("click", handleUserDocOverlayRefreshClick);
   userDocOverlayCloseBtn?.addEventListener("click", closeUserDocOverlay);
@@ -296,7 +297,6 @@ async function init() {
   seedStarterPlanBtn?.addEventListener("click", handleSeedStarterPlanClick);
   seedBusinessCatalogBtn?.addEventListener("click", handleSeedBusinessCatalogClick);
   toggleUserStatusBtn?.addEventListener("click", handleToggleUserStatus);
-  openWhatsappBtn?.addEventListener("click", openSelectedUserWhatsapp);
   userTrialSaveBtn?.addEventListener("click", handleSaveSelectedUserTrialControl);
   employeesTableBody?.addEventListener("click", handleEmployeeToggleClick);
   document.addEventListener("keydown", handleGlobalKeydown);
@@ -464,7 +464,7 @@ function applyUsersFilter() {
       });
 
   if (!rows.length) {
-    tableBody.innerHTML = '<tr><td colspan="11">No hay usuarios para mostrar.</td></tr>';
+    tableBody.innerHTML = `<tr><td colspan="${USERS_TABLE_COLSPAN}">No hay usuarios para mostrar.</td></tr>`;
     return;
   }
 
@@ -472,6 +472,29 @@ function applyUsersFilter() {
     .map((row) => {
       const isSelected = selectedUserUid && selectedUserUid === String(row?.uid || "").trim();
       const isTrialPlan = normalizePlanId(row?.planActual) === TRIAL_PLAN_ID;
+      const hasTenant = Boolean(String(row?.tenantId || "").trim());
+      const trialAccessAllowed = toTrialBoolean(row?.trialAccessAllowed, true);
+      const trialAccessCell = isTrialPlan
+        ? `<input
+            type="checkbox"
+            class="user-row-trial-toggle"
+            data-user-row-action="toggle-trial-access"
+            ${trialAccessAllowed ? "checked" : ""}
+            ${hasTenant ? "" : "disabled"}
+            title="${escapeHtml(
+              hasTenant
+                ? "Habilitar o deshabilitar acceso en prueba."
+                : "No se puede editar trial porque no tiene tenant."
+            )}"
+            aria-label="${escapeHtml(
+              `Permitir acceso en prueba para ${String(row?.nombre || "usuario").trim() || "usuario"}`
+            )}"
+          >`
+        : "--";
+      const hasPhone = Boolean(sanitizePhoneToDigits(row?.telefono));
+      const whatsappCell = hasPhone
+        ? '<button type="button" class="user-row-whatsapp-btn" data-user-row-action="open-whatsapp">WhatsApp</button>'
+        : "--";
       const rowClasses = [];
       if (isSelected) rowClasses.push("is-selected");
       if (isTrialPlan) rowClasses.push("is-trial");
@@ -489,22 +512,148 @@ function applyUsersFilter() {
         `<td>${escapeHtml(formatDate(row.fechaPago))}</td>`,
         `<td>${Number(row.cantidadEmpleados || 0)}</td>`,
         `<td>${Number(row.cantidadProductos || 0)}</td>`,
+        `<td class="user-row-actions-cell">${trialAccessCell}</td>`,
+        `<td class="user-row-actions-cell">${whatsappCell}</td>`,
         "</tr>"
       ].join("");
     })
     .join("");
 }
 
-function handleUserRowClick(event) {
+function findUserRowByUid(uid) {
+  const safeUid = String(uid || "").trim();
+  if (!safeUid) return null;
+  return allUserRows.find((entry) => String(entry?.uid || "").trim() === safeUid) || null;
+}
+
+function getUserRowFromUsersTableEvent(event) {
   const rowNode = event.target.closest("tr[data-user-uid]");
-  if (!rowNode) return;
+  if (!rowNode) return null;
   const uid = String(rowNode.getAttribute("data-user-uid") || "").trim();
-  if (!uid) return;
+  if (!uid) return null;
+  return findUserRowByUid(uid);
+}
 
-  const row = allUserRows.find((entry) => String(entry?.uid || "").trim() === uid);
+function handleUsersTableClick(event) {
+  const actionNode = event.target.closest("[data-user-row-action]");
+  if (actionNode) {
+    const action = String(actionNode.getAttribute("data-user-row-action") || "").trim();
+    if (action === "open-whatsapp") {
+      const row = getUserRowFromUsersTableEvent(event);
+      if (!row) return;
+      event.preventDefault();
+      event.stopPropagation();
+      openSelectedUserWhatsapp(row);
+    }
+    return;
+  }
+
+  const row = getUserRowFromUsersTableEvent(event);
   if (!row) return;
-
   selectUserRow(row);
+}
+
+function handleUsersTableChange(event) {
+  const toggleInput = event.target.closest('input[data-user-row-action="toggle-trial-access"]');
+  if (!toggleInput) return;
+  const row = getUserRowFromUsersTableEvent(event);
+  if (!row) return;
+  event.stopPropagation();
+  void handleInlineTrialAccessToggle(row, Boolean(toggleInput.checked), toggleInput);
+}
+
+async function handleInlineTrialAccessToggle(row, trialAccessAllowed, inputNode = null) {
+  const uid = String(row?.uid || "").trim();
+  const tenantId = String(row?.tenantId || "").trim();
+  const previousAccessAllowed = toTrialBoolean(row?.trialAccessAllowed, true);
+  const isTrialPlan = normalizePlanId(row?.planActual) === TRIAL_PLAN_ID;
+
+  if (!uid || !tenantId || !isTrialPlan || !auth.currentUser) {
+    if (inputNode) inputNode.checked = previousAccessAllowed;
+    if (!auth.currentUser) {
+      showGlobalToast("Inicia sesion nuevamente para editar acceso trial.", "warning");
+      return;
+    }
+    if (!tenantId) {
+      showGlobalToast("No se pudo resolver el tenant del usuario.", "warning");
+      return;
+    }
+    showGlobalToast("Solo aplica a cuentas del plan prueba.", "warning");
+    return;
+  }
+
+  if (inputNode) inputNode.disabled = true;
+  try {
+    const token = await auth.currentUser.getIdToken(true);
+    const response = await fetchWithLoading(getAdminAccountsEndpoint(), {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        action: "update_trial_control",
+        tenantId,
+        trialControl: {
+          trialAccessAllowed,
+          trialWarningEnabled: toTrialBoolean(row?.trialWarningEnabled, false)
+        }
+      })
+    });
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      throw new Error(result?.error || "No se pudo actualizar acceso trial.");
+    }
+
+    const resolvedPlan = normalizePlanId(result?.tenant?.planId || result?.tenant?.planActual || row?.planActual);
+    const resolvedAccessAllowed = toTrialBoolean(
+      result?.tenant?.trialControl?.trialAccessAllowed,
+      trialAccessAllowed
+    );
+    const resolvedWarningEnabled = toTrialBoolean(
+      result?.tenant?.trialControl?.trialWarningEnabled,
+      row?.trialWarningEnabled
+    );
+
+    allUserRows = allUserRows.map((entry) =>
+      String(entry?.uid || "").trim() === uid
+        ? {
+            ...entry,
+            planActual: resolvedPlan || entry?.planActual || "-",
+            trialAccessAllowed: resolvedAccessAllowed,
+            trialWarningEnabled: resolvedWarningEnabled,
+            trialControlLoaded: true
+          }
+        : entry
+    );
+
+    if (selectedUserUid === uid && selectedUserRow) {
+      selectedUserRow = {
+        ...selectedUserRow,
+        planActual: resolvedPlan || selectedUserRow?.planActual || "-",
+        trialAccessAllowed: resolvedAccessAllowed,
+        trialWarningEnabled: resolvedWarningEnabled,
+        trialControlLoaded: true
+      };
+      renderSelectedUserActions();
+      setUserTrialFeedback("Control trial actualizado.", "success");
+    }
+
+    applyUsersFilter();
+    showGlobalToast("Acceso trial actualizado.");
+  } catch (error) {
+    console.error(error);
+    if (inputNode) inputNode.checked = previousAccessAllowed;
+    showGlobalToast(error.message || "No se pudo actualizar acceso trial.", "error");
+    if (selectedUserUid === uid) {
+      setUserTrialFeedback(error.message || "No se pudo guardar el control trial.", "error");
+    }
+  } finally {
+    if (inputNode && document.body.contains(inputNode)) {
+      inputNode.disabled = false;
+    }
+  }
 }
 
 async function selectUserRow(row) {
@@ -2869,7 +3018,7 @@ function showLoggedOutState() {
     backupsSearchDebounce = null;
   }
   pendingGlobalLoads = 0;
-  tableBody.innerHTML = '<tr><td colspan="11">Sin datos.</td></tr>';
+  tableBody.innerHTML = `<tr><td colspan="${USERS_TABLE_COLSPAN}">Sin datos.</td></tr>`;
   if (metricEstimatedRevenue) metricEstimatedRevenue.textContent = "$0,00 / mes";
   if (planCardsNode) planCardsNode.innerHTML = "";
   if (employeesUserSelect) {
@@ -3197,11 +3346,13 @@ function setFeedback(message) {
 }
 
 function setTableLoading() {
-  tableBody.innerHTML = '<tr><td colspan="11">Cargando...</td></tr>';
+  tableBody.innerHTML = `<tr><td colspan="${USERS_TABLE_COLSPAN}">Cargando...</td></tr>`;
 }
 
 function setTableError(message) {
-  tableBody.innerHTML = `<tr><td colspan="11">${escapeHtml(String(message || "Error al cargar datos."))}</td></tr>`;
+  tableBody.innerHTML = `<tr><td colspan="${USERS_TABLE_COLSPAN}">${escapeHtml(
+    String(message || "Error al cargar datos.")
+  )}</td></tr>`;
 }
 
 function setPlansFeedback(message) {
@@ -3653,11 +3804,6 @@ function renderSelectedUserActions() {
   if (toggleUserStatusBtn) {
     toggleUserStatusBtn.textContent = nextActionLabel;
     toggleUserStatusBtn.disabled = false;
-  }
-
-  const phoneDigits = sanitizePhoneToDigits(selectedUserRow?.telefono);
-  if (openWhatsappBtn) {
-    openWhatsappBtn.disabled = !phoneDigits;
   }
 
   const isTrialPlan = normalizePlanId(selectedUserRow?.planActual) === TRIAL_PLAN_ID;
@@ -4319,11 +4465,24 @@ async function handleSaveSelectedUserTrialControl() {
   }
 }
 
-function openSelectedUserWhatsapp() {
-  if (!selectedUserRow) return;
-  const digits = sanitizePhoneToDigits(selectedUserRow?.telefono);
-  if (!digits) return;
-  window.open(`https://wa.me/${digits}`, "_blank", "noopener,noreferrer");
+function openSelectedUserWhatsapp(rowLike = null) {
+  const row = rowLike || selectedUserRow;
+  if (!row) return;
+  const digits = sanitizePhoneToDigits(row?.telefono);
+  if (!digits) {
+    showGlobalToast("El usuario no tiene telefono valido para WhatsApp.", "warning");
+    return;
+  }
+  const message = String(buildUserWhatsappPrefilledMessage(row) || "").trim();
+  const whatsappUrl = message
+    ? `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
+    : `https://wa.me/${digits}`;
+  window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+}
+
+function buildUserWhatsappPrefilledMessage(_row) {
+  // Edita este return para definir el texto prellenado de WhatsApp.
+  return "";
 }
 
 function sanitizePhoneToDigits(value) {

@@ -1,0 +1,31 @@
+Fecha: 2026-04-12
+Proyecto: stockFacilAdmin
+
+Pedido recibido:
+1) En panel admin > usuarios, agregar un check para habilitar/deshabilitar acceso en prueba
+   solo para usuarios con plan prueba. Para otros planes mostrar "--".
+2) Mover accion de WhatsApp al tr (tabla de usuarios) para abrir con 1 click desde telefono.
+3) Indicar exactamente donde esta la funcion para editar manualmente el mensaje de WhatsApp.
+4) Dejar registro en un .txt y ejecutar cambios.
+
+Cambios realizados:
+- Se agregaron 2 columnas en la tabla de usuarios:
+  - "Acceso prueba" (check solo en plan prueba; en otros planes muestra "--").
+  - "WhatsApp" (boton directo en cada fila, sin pasar por overlay).
+- Se quito el boton "Abrir WhatsApp" del panel overlay "Acciones de cuenta".
+- Se agregaron handlers en tabla para:
+  - abrir WhatsApp directo desde la fila,
+  - guardar trialAccessAllowed en Firebase con action "update_trial_control" al cambiar el check.
+- Se actualizaron placeholders y colspans de la tabla para 13 columnas.
+- Se ajustaron estilos para el check y el boton en fila.
+
+Ubicacion exacta para editar mensaje WhatsApp:
+- Archivo: app.js
+- Funcion principal que arma y abre URL: openSelectedUserWhatsapp(rowLike = null)
+- Funcion para texto prellenado (editar aqui): buildUserWhatsappPrefilledMessage(_row)
+  Actualmente retorna string vacio (sin mensaje prellenado).
+
+Nota sobre Functions:
+- En este repo no hay codigo fuente de Cloud Functions (solo package files en /functions).
+- Este cambio se resolvio en frontend del admin y reutiliza endpoint existente:
+  adminManageAccounts con action "update_trial_control".
