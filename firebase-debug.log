@@ -5061,3 +5061,117 @@ Aborting because deletion cannot proceed in non-interactive mode. To fix, manual
 [debug] [2026-03-30T04:40:45.755Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/kiosco-stock-493c6/channels/live/releases versionName=projects%2F997147264141%2Fsites%2Fkiosco-stock-493c6%2Fversions%2Fb8f572024fa9299b
 [debug] [2026-03-30T04:40:45.755Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/kiosco-stock-493c6/channels/live/releases {}
 [debug] [2026-03-30T04:40:46.567Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/kiosco-stock-493c6/channels/live/releases 200
+[debug] [2026-04-12T16:27:47.271Z] ----------------------------------------------------------------------
+[debug] [2026-04-12T16:27:47.291Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\37adr\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only hosting
+[debug] [2026-04-12T16:27:47.292Z] CLI Version:   15.12.0
+[debug] [2026-04-12T16:27:47.293Z] Platform:      win32
+[debug] [2026-04-12T16:27:47.293Z] Node Version:  v20.19.6
+[debug] [2026-04-12T16:27:47.294Z] Time:          Sun Apr 12 2026 13:27:47 GMT-0300 (hora estándar de Argentina)
+[debug] [2026-04-12T16:27:47.294Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-04-12T16:27:47.299Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2026-04-12T16:27:56.258Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-04-12T16:27:56.259Z] > authorizing via signed-in user (artbenitezdev@gmail.com)
+[debug] [2026-04-12T16:27:56.260Z] [iam] checking project kiosco-stock-493c6 for permissions ["firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-04-12T16:27:56.263Z] Checked if tokens are valid: false, expires at: 1775405382309
+[debug] [2026-04-12T16:27:56.263Z] Checked if tokens are valid: false, expires at: 1775405382309
+[debug] [2026-04-12T16:27:56.264Z] > refreshing access token with scopes: []
+[debug] [2026-04-12T16:27:56.268Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-04-12T16:27:56.268Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-04-12T16:27:56.560Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-04-12T16:27:56.561Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-04-12T16:27:56.576Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/kiosco-stock-493c6:testIamPermissions [none]
+[debug] [2026-04-12T16:27:56.577Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/kiosco-stock-493c6:testIamPermissions  x-goog-user-project=kiosco-stock-493c6
+[debug] [2026-04-12T16:27:56.577Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/kiosco-stock-493c6:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-04-12T16:27:56.999Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2026-04-12T16:27:57.000Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[debug] [2026-04-12T16:27:57.898Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/kiosco-stock-493c6:testIamPermissions 200
+[debug] [2026-04-12T16:27:57.898Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/kiosco-stock-493c6:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-04-12T16:27:57.899Z] Checked if tokens are valid: true, expires at: 1776014875562
+[debug] [2026-04-12T16:27:57.900Z] Checked if tokens are valid: true, expires at: 1776014875562
+[debug] [2026-04-12T16:27:57.901Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/kiosco-stock-493c6 [none]
+[debug] [2026-04-12T16:27:58.818Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/kiosco-stock-493c6 200
+[debug] [2026-04-12T16:27:58.819Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/kiosco-stock-493c6 {"projectId":"kiosco-stock-493c6","projectNumber":"997147264141","displayName":"StockFacil","name":"projects/kiosco-stock-493c6","resources":{"hostingSite":"kiosco-stock-493c6"},"state":"ACTIVE","etag":"1_2adf5abb-b100-4b1c-9bac-e857f7520dbe"}
+[info] 
+[info] === Deploying to 'kiosco-stock-493c6'...
+[info] 
+[info] i  deploying hosting 
+[debug] [2026-04-12T16:27:58.828Z] Checked if tokens are valid: true, expires at: 1776014875562
+[debug] [2026-04-12T16:27:58.828Z] Checked if tokens are valid: true, expires at: 1776014875562
+[debug] [2026-04-12T16:27:58.829Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/kiosco-stock-493c6/versions [none]
+[debug] [2026-04-12T16:27:58.829Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/kiosco-stock-493c6/versions {"status":"CREATED","labels":{"deployment-tool":"cli-firebase"}}
+[debug] [2026-04-12T16:28:01.026Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/kiosco-stock-493c6/versions 200
+[debug] [2026-04-12T16:28:01.026Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/kiosco-stock-493c6/versions {"name":"projects/997147264141/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e","status":"CREATED","config":{},"labels":{"deployment-tool":"cli-firebase"}}
+[info] i  hosting[kiosco-stock-493c6]: beginning deploy... 
+[info] i  hosting[kiosco-stock-493c6]: found 5 files in . 
+[debug] [2026-04-12T16:28:01.061Z] [hosting] uploading with 200 concurrency
+[debug] [2026-04-12T16:28:01.093Z] Checked if tokens are valid: true, expires at: 1776014875562
+[debug] [2026-04-12T16:28:01.093Z] Checked if tokens are valid: true, expires at: 1776014875562
+[debug] [2026-04-12T16:28:01.097Z] [hosting] hash cache [] stored for 5 files
+[debug] [2026-04-12T16:28:01.097Z] [hosting][hash queue][FINAL] {"max":22,"min":1,"avg":10.6,"active":0,"complete":5,"success":5,"errored":0,"retried":0,"total":5,"elapsed":32}
+[debug] [2026-04-12T16:28:01.098Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/997147264141/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e:populateFiles [none]
+[debug] [2026-04-12T16:28:01.099Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/997147264141/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e:populateFiles {"files":{"/favicon.svg":"38066bdc979f944233fd5ab5b9e23d304f479e04e6ad240ec25e5830bca4834d","/businessCatalogSeed.js":"64483c6d060626f38b595955fe4ab002ec70d0240c998f73ebe1137d1f378ec2","/styles.css":"fe4be7a6fe481bac68aa841a530a711b54e688e6fc51d31a2642a1c96aa0c0e4","/index.html":"eccb502bf26ee4d87d702d030f0a782fa995ff2389e5ee21067f96905a230f0e","/app.js":"f5a991931192c8a350cf4a8744d06f80b4dca39153f5fb2449bf7a504dd79cd7"}}
+[debug] [2026-04-12T16:28:02.074Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/997147264141/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e:populateFiles 200
+[debug] [2026-04-12T16:28:02.074Z] <<< [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/997147264141/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e:populateFiles {"uploadRequiredHashes":["eccb502bf26ee4d87d702d030f0a782fa995ff2389e5ee21067f96905a230f0e","f5a991931192c8a350cf4a8744d06f80b4dca39153f5fb2449bf7a504dd79cd7","fe4be7a6fe481bac68aa841a530a711b54e688e6fc51d31a2642a1c96aa0c0e4"],"uploadUrl":"https://upload-firebasehosting.googleapis.com/upload/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e/files"}
+[debug] [2026-04-12T16:28:02.076Z] Checked if tokens are valid: true, expires at: 1776014875562
+[debug] [2026-04-12T16:28:02.076Z] Checked if tokens are valid: true, expires at: 1776014875562
+[debug] [2026-04-12T16:28:02.077Z] Checked if tokens are valid: true, expires at: 1776014875562
+[debug] [2026-04-12T16:28:02.077Z] Checked if tokens are valid: true, expires at: 1776014875562
+[debug] [2026-04-12T16:28:02.079Z] Checked if tokens are valid: true, expires at: 1776014875562
+[debug] [2026-04-12T16:28:02.079Z] Checked if tokens are valid: true, expires at: 1776014875562
+[debug] [2026-04-12T16:28:02.079Z] >>> [apiv2][query] POST https://upload-firebasehosting.googleapis.com/upload/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e/files/eccb502bf26ee4d87d702d030f0a782fa995ff2389e5ee21067f96905a230f0e [none]
+[debug] [2026-04-12T16:28:02.080Z] >>> [apiv2][body] POST https://upload-firebasehosting.googleapis.com/upload/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e/files/eccb502bf26ee4d87d702d030f0a782fa995ff2389e5ee21067f96905a230f0e [stream]
+[debug] [2026-04-12T16:28:02.082Z] >>> [apiv2][query] POST https://upload-firebasehosting.googleapis.com/upload/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e/files/f5a991931192c8a350cf4a8744d06f80b4dca39153f5fb2449bf7a504dd79cd7 [none]
+[debug] [2026-04-12T16:28:02.083Z] >>> [apiv2][body] POST https://upload-firebasehosting.googleapis.com/upload/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e/files/f5a991931192c8a350cf4a8744d06f80b4dca39153f5fb2449bf7a504dd79cd7 [stream]
+[debug] [2026-04-12T16:28:02.086Z] >>> [apiv2][query] POST https://upload-firebasehosting.googleapis.com/upload/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e/files/fe4be7a6fe481bac68aa841a530a711b54e688e6fc51d31a2642a1c96aa0c0e4 [none]
+[debug] [2026-04-12T16:28:02.086Z] >>> [apiv2][body] POST https://upload-firebasehosting.googleapis.com/upload/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e/files/fe4be7a6fe481bac68aa841a530a711b54e688e6fc51d31a2642a1c96aa0c0e4 [stream]
+[debug] [2026-04-12T16:28:02.090Z] [hosting][populate queue][FINAL] {"max":987,"min":987,"avg":987,"active":0,"complete":1,"success":1,"errored":0,"retried":0,"total":1,"elapsed":998}
+[debug] [2026-04-12T16:28:02.090Z] [hosting] uploads queued: 3
+[info] i  hosting: uploading new files [0/3] (0%) 
+[debug] [2026-04-12T16:28:04.872Z] <<< [apiv2][status] POST https://upload-firebasehosting.googleapis.com/upload/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e/files/f5a991931192c8a350cf4a8744d06f80b4dca39153f5fb2449bf7a504dd79cd7 200
+[debug] [2026-04-12T16:28:04.872Z] <<< [apiv2][body] POST https://upload-firebasehosting.googleapis.com/upload/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e/files/f5a991931192c8a350cf4a8744d06f80b4dca39153f5fb2449bf7a504dd79cd7 [stream]
+[debug] [2026-04-12T16:28:04.874Z] <<< [apiv2][status] POST https://upload-firebasehosting.googleapis.com/upload/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e/files/fe4be7a6fe481bac68aa841a530a711b54e688e6fc51d31a2642a1c96aa0c0e4 200
+[debug] [2026-04-12T16:28:04.874Z] <<< [apiv2][body] POST https://upload-firebasehosting.googleapis.com/upload/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e/files/fe4be7a6fe481bac68aa841a530a711b54e688e6fc51d31a2642a1c96aa0c0e4 [stream]
+[debug] [2026-04-12T16:28:04.923Z] <<< [apiv2][status] POST https://upload-firebasehosting.googleapis.com/upload/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e/files/eccb502bf26ee4d87d702d030f0a782fa995ff2389e5ee21067f96905a230f0e 200
+[debug] [2026-04-12T16:28:04.923Z] <<< [apiv2][body] POST https://upload-firebasehosting.googleapis.com/upload/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e/files/eccb502bf26ee4d87d702d030f0a782fa995ff2389e5ee21067f96905a230f0e [stream]
+[debug] [2026-04-12T16:28:04.924Z] [hosting][upload queue][FINAL] {"max":2849,"min":2797,"avg":2814.3333333333335,"active":0,"complete":3,"success":3,"errored":0,"retried":0,"total":3,"elapsed":2849}
+[info] i  hosting: upload complete 
+[info] +  hosting[kiosco-stock-493c6]: file upload complete 
+[debug] [2026-04-12T16:28:04.925Z] [hosting] deploy completed after 3894ms
+[debug] [2026-04-12T16:28:04.925Z] [
+  {
+    "config": {
+      "public": ".",
+      "ignore": [
+        "firebase.json",
+        ".firebaserc",
+        ".git",
+        ".git/**",
+        ".firebase",
+        ".firebase/**",
+        "**/.*/**",
+        "**/node_modules/**",
+        "functions/**",
+        "docs/**",
+        "firebase-debug.log"
+      ],
+      "site": "kiosco-stock-493c6"
+    },
+    "version": "projects/997147264141/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e"
+  }
+]
+[info] i  hosting[kiosco-stock-493c6]: finalizing version... 
+[debug] [2026-04-12T16:28:04.929Z] Checked if tokens are valid: true, expires at: 1776014875562
+[debug] [2026-04-12T16:28:04.929Z] Checked if tokens are valid: true, expires at: 1776014875562
+[debug] [2026-04-12T16:28:04.932Z] >>> [apiv2][query] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e updateMask=status%2Cconfig
+[debug] [2026-04-12T16:28:04.933Z] >>> [apiv2][body] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e {"status":"FINALIZED","config":{}}
+[debug] [2026-04-12T16:28:05.678Z] <<< [apiv2][status] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e 200
+[debug] [2026-04-12T16:28:05.678Z] <<< [apiv2][body] PATCH https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e {"name":"projects/997147264141/sites/kiosco-stock-493c6/versions/ffe1fae1b91ac48e","status":"FINALIZED","config":{},"labels":{"deployment-tool":"cli-firebase"},"createTime":"2026-04-12T16:28:00.496807Z","createUser":{"email":"artbenitezdev@gmail.com"},"finalizeTime":"2026-04-12T16:28:05.677509Z","finalizeUser":{"email":"artbenitezdev@gmail.com"}}
+[debug] [2026-04-12T16:28:05.678Z] [hosting] finalized version for kiosco-stock-493c6:[object Object]
+[info] +  hosting[kiosco-stock-493c6]: version finalized 
+[info] i  hosting[kiosco-stock-493c6]: releasing new version... 
+[debug] [2026-04-12T16:28:05.679Z] Checked if tokens are valid: true, expires at: 1776014875562
+[debug] [2026-04-12T16:28:05.679Z] Checked if tokens are valid: true, expires at: 1776014875562
+[debug] [2026-04-12T16:28:05.680Z] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/kiosco-stock-493c6/channels/live/releases versionName=projects%2F997147264141%2Fsites%2Fkiosco-stock-493c6%2Fversions%2Fffe1fae1b91ac48e
+[debug] [2026-04-12T16:28:05.680Z] >>> [apiv2][body] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/kiosco-stock-493c6/channels/live/releases {}
+[debug] [2026-04-12T16:28:06.497Z] <<< [apiv2][status] POST https://firebasehosting.googleapis.com/v1beta1/projects/-/sites/kiosco-stock-493c6/channels/live/releases 200
