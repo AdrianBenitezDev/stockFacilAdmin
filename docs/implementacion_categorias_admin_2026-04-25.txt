@@ -1,0 +1,90 @@
+Fecha: 2026-04-25
+Proyecto: stockFacilAdmin
+
+Implementacion solicitada: seccion "categorias" en Admin > Administrador
+
+Objetivo
+- Agregar una subseccion nueva llamada "Categorias".
+- Permitir:
+  - seleccionar categorias actuales,
+  - editar categoria existente,
+  - cargar/editar el array de categorias en formato texto (JSON),
+  - editar nombre, id y activo,
+  - ver orden no editable (incremental automatico),
+  - guardar cambios con un boton "Guardar".
+
+Cambios realizados
+1) UI (index.html)
+- Se agrego boton de navegacion: admin-manager-nav-categories-btn.
+- Se agrego section nueva: admin-categories-section.
+- Se agrego formulario con estos campos:
+  - select categorias actuales: admin-categories-select
+  - textarea array JSON: admin-categories-array-input
+  - input nombre: admin-category-name-input
+  - input id: admin-category-id-input
+  - select activo true/false: admin-category-active-select
+  - input orden readonly: admin-category-order-input
+  - boton guardar: admin-categories-save-btn
+
+2) Logica (app.js)
+- Navegacion manager:
+  - ahora soporta subsection "categories" en setActiveManagerSubsection.
+  - se agrega carga en loadManagerActiveSubsection.
+  - se agrega refresh en handleRefresh para categorias.
+- Estado nuevo:
+  - selectedCategoriesUserUid
+  - selectedCategoriesTenantId
+  - allCategoryRows
+  - selectedCategoryDraftId
+  - latestCategoriesRequestId
+- Carga de datos:
+  - Se usa adminGetTenantById (reutilizando loadTenantDocFromBackend).
+  - Se extraen categorias desde multiples rutas posibles del tenant doc.
+  - Se cachea por tenant con getCachedSectionRows/saveCachedSectionRows (key "categories").
+- Edicion:
+  - seleccionar categoria rellena nombre/id/activo/orden.
+  - si se elige "Nueva categoria...", orden se calcula automaticamente (max + 1).
+  - el array textual se parsea como JSON y se normaliza.
+  - al guardar se hace upsert de la categoria del formulario sobre el array textual.
+- Orden incremental:
+  - siempre se renumera 1..N en normalizeCategoryRows.
+  - input orden es readonly y solo informativo.
+- Guardado backend:
+  - saveCategoriesRowsByTenant intenta acciones compatibles en adminManageAccounts:
+    1) action: update_categories
+    2) action: update_tenant_categories
+    3) action: update_product_categories
+  - fallback adicional: PUT a adminGetTenantById con categories/categorias.
+  - si backend no soporta ninguna variante, se muestra error en feedback.
+
+3) Estilos (styles.css)
+- Se agregaron estilos para los nuevos selects/focus de categorias.
+- Se ajusto boton guardar de categorias para mantener consistencia visual.
+
+Funciones nuevas creadas en app.js
+- handleCategoriesSelectChange
+- syncCategoryOrderPreviewFromFields
+- loadCategoriesForSelectedUser
+- fetchCategoriesRowsByTenant
+- extractCategoriesRowsFromTenantPayload
+- normalizeCategoryRows
+- normalizeCategoryRow
+- normalizeCategoryIdToken
+- buildCategoryIdFromName
+- renderCategoriesEditor
+- renderCategoriesSelectOptions
+- fillCategoryFormFromSelection
+- getSelectedCategoryById
+- getNextCategoryOrder
+- clearCategoriesEditorState
+- setCategoriesEditorEnabled
+- formatCategoriesArrayInputValue
+- parseCategoriesArrayInput
+- handleCategoriesSave
+- saveCategoriesRowsByTenant
+- setCategoriesFeedback
+- setCategoriesPlaceholder
+
+Notas tecnicas
+- En este repo no hay codigo fuente de Cloud Functions, por eso el guardado usa endpoints existentes con estrategia de compatibilidad por action.
+- Si el backend valida una action especifica distinta, hay que agregar ese nombre en saveCategoriesRowsByTenant.

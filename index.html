@@ -279,6 +279,7 @@
 
         <div class="section-nav manager-sub-nav">
           <button id="admin-manager-nav-products-btn" type="button" class="mode-btn is-active">Productos</button>
+          <button id="admin-manager-nav-categories-btn" type="button" class="mode-btn-secondary">Categorias</button>
           <button id="admin-manager-nav-sales-btn" type="button" class="mode-btn-secondary">Ventas</button>
           <button id="admin-manager-nav-cashboxes-btn" type="button" class="mode-btn-secondary">Cajas</button>
           <button id="admin-manager-nav-backups-btn" type="button" class="mode-btn-secondary">Backup</button>
@@ -320,6 +321,44 @@
               </tbody>
             </table>
           </div>
+        </section>
+
+        <section id="admin-categories-section" class="hidden">
+          <p class="subtitle">Administra categorias del usuario seleccionado.</p>
+          <p id="admin-categories-feedback" class="feedback" aria-live="polite"></p>
+
+          <form id="admin-categories-form" class="plan-editor categories-editor">
+            <h3>Categorias</h3>
+
+            <label for="admin-categories-select">Categorias actuales</label>
+            <select id="admin-categories-select">
+              <option value="">Nueva categoria...</option>
+            </select>
+
+            <label for="admin-categories-array-input">Array de categorias (JSON)</label>
+            <textarea
+              id="admin-categories-array-input"
+              rows="8"
+              placeholder='[{"id":"gaseosas","nombre":"Gaseosas","activo":true,"orden":1}]'
+            ></textarea>
+
+            <label for="admin-category-name-input">Nombre de la categoria</label>
+            <input id="admin-category-name-input" type="text" maxlength="80" autocomplete="off">
+
+            <label for="admin-category-id-input">ID de la categoria</label>
+            <input id="admin-category-id-input" type="text" maxlength="80" autocomplete="off">
+
+            <label for="admin-category-active-select">Activo</label>
+            <select id="admin-category-active-select">
+              <option value="true">true</option>
+              <option value="false">false</option>
+            </select>
+
+            <label for="admin-category-order-input">Orden</label>
+            <input id="admin-category-order-input" type="number" readonly>
+
+            <button id="admin-categories-save-btn" type="submit">Guardar</button>
+          </form>
         </section>
 
         <section id="admin-sales-section" class="hidden">

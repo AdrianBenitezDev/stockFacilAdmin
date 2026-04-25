@@ -75,6 +75,7 @@ const navPlansBtn = document.getElementById("admin-nav-plans-btn");
 const navManagerBtn = document.getElementById("admin-nav-manager-btn");
 const navChangePlanBtn = document.getElementById("admin-nav-change-plan-btn");
 const managerNavProductsBtn = document.getElementById("admin-manager-nav-products-btn");
+const managerNavCategoriesBtn = document.getElementById("admin-manager-nav-categories-btn");
 const managerNavSalesBtn = document.getElementById("admin-manager-nav-sales-btn");
 const managerNavCashboxesBtn = document.getElementById("admin-manager-nav-cashboxes-btn");
 const managerNavBackupsBtn = document.getElementById("admin-manager-nav-backups-btn");
@@ -84,6 +85,7 @@ const plansSection = document.getElementById("admin-plans-section");
 const managerSection = document.getElementById("admin-manager-section");
 const changePlanSection = document.getElementById("admin-change-plan-section");
 const productsSection = document.getElementById("admin-products-section");
+const categoriesSection = document.getElementById("admin-categories-section");
 const salesSection = document.getElementById("admin-sales-section");
 const cashboxesSection = document.getElementById("admin-cashboxes-section");
 const backupsSection = document.getElementById("admin-backups-section");
@@ -159,6 +161,15 @@ const productsFeedbackNode = document.getElementById("admin-products-feedback");
 const productsSearchInput = document.getElementById("admin-products-search");
 const productsTableBody = document.getElementById("admin-products-table-body");
 const productsBackupBtn = document.getElementById("admin-products-backup-btn");
+const categoriesFeedbackNode = document.getElementById("admin-categories-feedback");
+const categoriesForm = document.getElementById("admin-categories-form");
+const categoriesSelect = document.getElementById("admin-categories-select");
+const categoriesArrayInput = document.getElementById("admin-categories-array-input");
+const categoryNameInput = document.getElementById("admin-category-name-input");
+const categoryIdInput = document.getElementById("admin-category-id-input");
+const categoryActiveSelect = document.getElementById("admin-category-active-select");
+const categoryOrderInput = document.getElementById("admin-category-order-input");
+const categoriesSaveBtn = document.getElementById("admin-categories-save-btn");
 const salesFeedbackNode = document.getElementById("admin-sales-feedback");
 const salesSearchInput = document.getElementById("admin-sales-search");
 const salesTableBody = document.getElementById("admin-sales-table-body");
@@ -205,6 +216,11 @@ let selectedProductsTenantId = "";
 let allProductRows = [];
 let productsSearchDebounce = null;
 let latestProductsRequestId = 0;
+let selectedCategoriesUserUid = "";
+let selectedCategoriesTenantId = "";
+let allCategoryRows = [];
+let selectedCategoryDraftId = "";
+let latestCategoriesRequestId = 0;
 let selectedSalesUserUid = "";
 let selectedSalesTenantId = "";
 let allSalesRows = [];
@@ -261,6 +277,7 @@ async function init() {
   navManagerBtn?.addEventListener("click", () => setActiveSection("manager"));
   navChangePlanBtn?.addEventListener("click", () => setActiveSection("change-plan"));
   managerNavProductsBtn?.addEventListener("click", () => setActiveManagerSubsection("products"));
+  managerNavCategoriesBtn?.addEventListener("click", () => setActiveManagerSubsection("categories"));
   managerNavSalesBtn?.addEventListener("click", () => setActiveManagerSubsection("sales"));
   managerNavCashboxesBtn?.addEventListener("click", () => setActiveManagerSubsection("cashboxes"));
   managerNavBackupsBtn?.addEventListener("click", () => setActiveManagerSubsection("backups"));
@@ -272,6 +289,11 @@ async function init() {
   employeesUserSelect?.addEventListener("change", handleEmployeesUserSelectChange);
   productsSearchInput?.addEventListener("input", handleProductsSearchInput);
   productsBackupBtn?.addEventListener("click", handleProductsBackupClick);
+  categoriesSelect?.addEventListener("change", handleCategoriesSelectChange);
+  categoriesForm?.addEventListener("submit", handleCategoriesSave);
+  categoryNameInput?.addEventListener("input", syncCategoryOrderPreviewFromFields);
+  categoryIdInput?.addEventListener("input", syncCategoryOrderPreviewFromFields);
+  categoryActiveSelect?.addEventListener("change", syncCategoryOrderPreviewFromFields);
   salesSearchInput?.addEventListener("input", handleSalesSearchInput);
   salesBackupBtn?.addEventListener("click", handleSalesBackupClick);
   cashboxesSearchInput?.addEventListener("input", handleCashboxesSearchInput);
@@ -346,6 +368,10 @@ async function handleRefresh() {
   if (activeSection === "manager") {
     if (activeManagerSubsection === "products") {
       await loadProductsForSelectedUser({ forceRemote: true });
+      return;
+    }
+    if (activeManagerSubsection === "categories") {
+      await loadCategoriesForSelectedUser({ forceRemote: true });
       return;
     }
     if (activeManagerSubsection === "sales") {
@@ -839,6 +865,8 @@ function renderManagerUserOptions() {
 
   if (!activeUsers.length) {
     allProductRows = [];
+    allCategoryRows = [];
+    selectedCategoryDraftId = "";
     allSalesRows = [];
     allCashboxesRows = [];
     allCashboxesSourceRows = [];
@@ -854,6 +882,10 @@ function renderManagerUserOptions() {
     renderBackupSalesTable([]);
     setProductsPlaceholder("No hay usuarios activos para consultar productos.");
     setProductsFeedback("");
+    clearCategoriesEditorState();
+    setCategoriesPlaceholder("No hay usuarios activos para consultar categorias.");
+    setCategoriesFeedback("No hay usuarios activos para consultar categorias.");
+    setCategoriesEditorEnabled(false);
     setSalesPlaceholder("No hay usuarios activos para consultar ventas.");
     setSalesFeedback("");
     setCashboxesPlaceholder("No hay usuarios activos para consultar cajas.");
@@ -878,6 +910,8 @@ function syncManagerSelectionToSectionTargets(uid, tenantId) {
   const safeTenantId = String(tenantId || "").trim();
   selectedProductsUserUid = safeUid;
   selectedProductsTenantId = safeTenantId;
+  selectedCategoriesUserUid = safeUid;
+  selectedCategoriesTenantId = safeTenantId;
   selectedSalesUserUid = safeUid;
   selectedSalesTenantId = safeTenantId;
   selectedCashboxesUserUid = safeUid;
@@ -893,6 +927,8 @@ function handleManagerUserSelectChange() {
   selectedManagerTenantId = String(row?.tenantId || "").trim();
   syncManagerSelectionToSectionTargets(selectedManagerUserUid, selectedManagerTenantId);
   allProductRows = [];
+  allCategoryRows = [];
+  selectedCategoryDraftId = "";
   allSalesRows = [];
   allCashboxesRows = [];
   allCashboxesSourceRows = [];
@@ -904,6 +940,8 @@ function handleManagerUserSelectChange() {
   renderSelectedCashboxDetail();
   renderBackupSalesTable([]);
   setBackupSalesFeedback("Selecciona un backup para ver sus ventas.");
+  clearCategoriesEditorState();
+  setCategoriesFeedback("");
   syncBackupButtonsState();
   void loadManagerActiveSubsection();
 }
@@ -911,6 +949,10 @@ function handleManagerUserSelectChange() {
 async function loadManagerActiveSubsection(options = {}) {
   if (activeManagerSubsection === "products") {
     await loadProductsForSelectedUser(options);
+    return;
+  }
+  if (activeManagerSubsection === "categories") {
+    await loadCategoriesForSelectedUser(options);
     return;
   }
   if (activeManagerSubsection === "sales") {
@@ -1465,6 +1507,433 @@ function renderProductsTable(rows) {
       ].join("")
     )
     .join("");
+}
+
+function handleCategoriesSelectChange() {
+  selectedCategoryDraftId = String(categoriesSelect?.value || "").trim();
+  fillCategoryFormFromSelection();
+}
+
+function syncCategoryOrderPreviewFromFields() {
+  if (!categoryOrderInput) return;
+  const selected = getSelectedCategoryById(selectedCategoryDraftId);
+  if (selected) {
+    categoryOrderInput.value = String(toPositiveInteger(selected.orden) || 1);
+    return;
+  }
+  categoryOrderInput.value = String(getNextCategoryOrder(allCategoryRows));
+}
+
+async function loadCategoriesForSelectedUser(options = {}) {
+  if (!auth.currentUser) return;
+  if (!selectedCategoriesTenantId) {
+    allCategoryRows = [];
+    selectedCategoryDraftId = "";
+    clearCategoriesEditorState();
+    setCategoriesPlaceholder("Selecciona un usuario en Administrador para ver categorias.");
+    setCategoriesFeedback("Selecciona un usuario en Administrador para ver categorias.");
+    setCategoriesEditorEnabled(false);
+    return;
+  }
+
+  const forceRemote = options?.forceRemote === true;
+  const requestId = ++latestCategoriesRequestId;
+  setCategoriesEditorEnabled(false);
+  setCategoriesFeedback(forceRemote ? "Actualizando categorias desde Firebase..." : "Buscando categorias...");
+
+  try {
+    let sourceRows = [];
+    let source = "cache";
+    if (!forceRemote) {
+      sourceRows = await getCachedSectionRows("categories", selectedCategoriesTenantId);
+    }
+    if (forceRemote || !sourceRows.length) {
+      sourceRows = await fetchCategoriesRowsByTenant(selectedCategoriesTenantId);
+      source = "remote";
+      await saveCachedSectionRows("categories", selectedCategoriesTenantId, sourceRows);
+    }
+    if (requestId !== latestCategoriesRequestId) return;
+
+    allCategoryRows = normalizeCategoryRows(sourceRows);
+    if (!selectedCategoryDraftId || !allCategoryRows.some((row) => row.id === selectedCategoryDraftId)) {
+      selectedCategoryDraftId = allCategoryRows[0]?.id || "";
+    }
+    renderCategoriesEditor();
+    if (!allCategoryRows.length) {
+      setCategoriesFeedback("No hay categorias para este usuario.");
+      return;
+    }
+    setCategoriesFeedback(
+      source === "cache"
+        ? `${allCategoryRows.length} categoria(s) desde cache local.`
+        : `${allCategoryRows.length} categoria(s) actualizadas desde Firebase.`
+    );
+  } catch (error) {
+    console.error(error);
+    if (requestId !== latestCategoriesRequestId) return;
+    allCategoryRows = [];
+    selectedCategoryDraftId = "";
+    clearCategoriesEditorState();
+    setCategoriesPlaceholder(error.message || "No se pudieron cargar categorias.");
+    setCategoriesFeedback(error.message || "No se pudieron cargar categorias.");
+  } finally {
+    if (requestId === latestCategoriesRequestId) {
+      setCategoriesEditorEnabled(Boolean(selectedCategoriesTenantId));
+    }
+  }
+}
+
+async function fetchCategoriesRowsByTenant(tenantId) {
+  if (!auth.currentUser) return [];
+  const payload = await loadTenantDocFromBackend(tenantId);
+  return extractCategoriesRowsFromTenantPayload(payload);
+}
+
+function extractCategoriesRowsFromTenantPayload(payload) {
+  const tenantDoc = extractTenantDocFromPayload(payload) || asObject(payload?.tenant) || asObject(payload?.tenantDoc);
+  const candidates = [
+    tenantDoc?.categorias,
+    tenantDoc?.categories,
+    tenantDoc?.categoriasProductos,
+    tenantDoc?.productCategories,
+    tenantDoc?.configuracion?.categorias,
+    tenantDoc?.configuracion?.categories,
+    tenantDoc?.settings?.categorias,
+    tenantDoc?.settings?.categories,
+    payload?.categorias,
+    payload?.categories
+  ];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+  return [];
+}
+
+function normalizeCategoryRows(sourceLike) {
+  if (!Array.isArray(sourceLike)) return [];
+  const rows = sourceLike
+    .map((entry, index) => normalizeCategoryRow(entry, index))
+    .filter(Boolean)
+    .sort((a, b) => {
+      const byOrder = toPositiveInteger(a.orden) - toPositiveInteger(b.orden);
+      if (byOrder !== 0) return byOrder;
+      return toPositiveInteger(a._index) - toPositiveInteger(b._index);
+    });
+
+  const usedIds = new Set();
+  return rows.map((row, index) => {
+    const baseId = normalizeCategoryIdToken(row.id) || buildCategoryIdFromName(row.nombre) || `categoria-${index + 1}`;
+    let resolvedId = baseId;
+    let suffix = 2;
+    while (usedIds.has(resolvedId)) {
+      resolvedId = `${baseId}-${suffix}`;
+      suffix += 1;
+    }
+    usedIds.add(resolvedId);
+    const resolvedName = normalizeTextWithMax(row.nombre, resolvedId, 80) || resolvedId;
+    return {
+      id: resolvedId,
+      nombre: resolvedName,
+      activo: row.activo !== false,
+      orden: index + 1
+    };
+  });
+}
+
+function normalizeCategoryRow(entryLike, index) {
+  if (typeof entryLike === "string") {
+    const nameFromString = normalizeTextWithMax(entryLike, "", 80);
+    const idFromString = buildCategoryIdFromName(nameFromString) || `categoria-${index + 1}`;
+    return {
+      id: idFromString,
+      nombre: nameFromString || idFromString,
+      activo: true,
+      orden: index + 1,
+      _index: index
+    };
+  }
+
+  const entry = asObject(entryLike);
+  const nombre = normalizeTextWithMax(
+    entry?.nombre || entry?.name || entry?.categoria || entry?.category || entry?.label,
+    "",
+    80
+  );
+  const id = normalizeCategoryIdToken(
+    entry?.id || entry?.categoryId || entry?.categoriaId || entry?.codigo || entry?.code || entry?.slug
+  );
+  const activo = toSafeBoolean(entry?.activo ?? entry?.active ?? entry?.enabled, true);
+  const orderRaw = Number(entry?.orden ?? entry?.order ?? entry?.position ?? index + 1);
+  const orden = Number.isFinite(orderRaw) && orderRaw > 0 ? Math.trunc(orderRaw) : index + 1;
+
+  if (!id && !nombre) return null;
+  const resolvedId = id || buildCategoryIdFromName(nombre) || `categoria-${index + 1}`;
+  return {
+    id: resolvedId,
+    nombre: nombre || resolvedId,
+    activo,
+    orden,
+    _index: index
+  };
+}
+
+function normalizeCategoryIdToken(valueLike) {
+  const raw = String(valueLike || "").trim();
+  if (!raw) return "";
+  return raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^[-_]+|[-_]+$/g, "")
+    .slice(0, 80);
+}
+
+function buildCategoryIdFromName(nameLike) {
+  const normalized = normalizeCategoryIdToken(nameLike);
+  return normalized || "";
+}
+
+function renderCategoriesEditor() {
+  renderCategoriesSelectOptions();
+  fillCategoryFormFromSelection();
+  if (categoriesArrayInput) {
+    categoriesArrayInput.value = formatCategoriesArrayInputValue(allCategoryRows);
+  }
+}
+
+function renderCategoriesSelectOptions() {
+  if (!categoriesSelect) return;
+  categoriesSelect.innerHTML =
+    '<option value="">Nueva categoria...</option>' +
+    allCategoryRows
+      .map((row) => {
+        const label = `${row.orden}. ${row.nombre} (${row.id})`;
+        return `<option value="${escapeHtml(row.id)}"${row.id === selectedCategoryDraftId ? " selected" : ""}>${escapeHtml(label)}</option>`;
+      })
+      .join("");
+}
+
+function fillCategoryFormFromSelection() {
+  const selected = getSelectedCategoryById(selectedCategoryDraftId);
+  if (selected) {
+    if (categoryNameInput) categoryNameInput.value = selected.nombre;
+    if (categoryIdInput) categoryIdInput.value = selected.id;
+    if (categoryActiveSelect) categoryActiveSelect.value = selected.activo ? "true" : "false";
+    if (categoryOrderInput) categoryOrderInput.value = String(toPositiveInteger(selected.orden) || 1);
+    return;
+  }
+
+  if (categoryNameInput) categoryNameInput.value = "";
+  if (categoryIdInput) categoryIdInput.value = "";
+  if (categoryActiveSelect) categoryActiveSelect.value = "true";
+  if (categoryOrderInput) categoryOrderInput.value = String(getNextCategoryOrder(allCategoryRows));
+}
+
+function getSelectedCategoryById(categoryId) {
+  const safeId = String(categoryId || "").trim();
+  if (!safeId) return null;
+  return allCategoryRows.find((row) => row.id === safeId) || null;
+}
+
+function getNextCategoryOrder(rows) {
+  if (!Array.isArray(rows) || !rows.length) return 1;
+  const maxOrder = rows.reduce((acc, row) => {
+    const numeric = toPositiveInteger(row?.orden);
+    return numeric > acc ? numeric : acc;
+  }, 0);
+  return maxOrder + 1;
+}
+
+function clearCategoriesEditorState() {
+  if (categoriesSelect) {
+    categoriesSelect.innerHTML = '<option value="">Nueva categoria...</option>';
+    categoriesSelect.value = "";
+  }
+  if (categoriesArrayInput) categoriesArrayInput.value = "[]";
+  if (categoryNameInput) categoryNameInput.value = "";
+  if (categoryIdInput) categoryIdInput.value = "";
+  if (categoryActiveSelect) categoryActiveSelect.value = "true";
+  if (categoryOrderInput) categoryOrderInput.value = "1";
+}
+
+function setCategoriesEditorEnabled(enabled) {
+  const shouldEnable = enabled === true;
+  if (categoriesSelect) categoriesSelect.disabled = !shouldEnable;
+  if (categoriesArrayInput) categoriesArrayInput.disabled = !shouldEnable;
+  if (categoryNameInput) categoryNameInput.disabled = !shouldEnable;
+  if (categoryIdInput) categoryIdInput.disabled = !shouldEnable;
+  if (categoryActiveSelect) categoryActiveSelect.disabled = !shouldEnable;
+  if (categoryOrderInput) categoryOrderInput.disabled = true;
+  if (categoriesSaveBtn) categoriesSaveBtn.disabled = !shouldEnable;
+}
+
+function formatCategoriesArrayInputValue(rows) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  return JSON.stringify(
+    safeRows.map((row) => ({
+      id: row.id,
+      nombre: row.nombre,
+      activo: row.activo !== false,
+      orden: toPositiveInteger(row.orden) || 1
+    })),
+    null,
+    2
+  );
+}
+
+function parseCategoriesArrayInput(valueLike) {
+  const raw = String(valueLike || "").trim();
+  if (!raw) return [];
+  let parsed = null;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (_error) {
+    throw new Error("El array de categorias debe tener formato JSON valido.");
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error("El campo array de categorias debe ser un array JSON.");
+  }
+  return normalizeCategoryRows(parsed);
+}
+
+async function handleCategoriesSave(event) {
+  event.preventDefault();
+  if (!auth.currentUser) return;
+
+  const tenantId = String(selectedCategoriesTenantId || "").trim();
+  if (!tenantId) {
+    setCategoriesFeedback("Selecciona un usuario activo antes de guardar categorias.");
+    return;
+  }
+
+  const draftName = normalizeTextWithMax(categoryNameInput?.value, "", 80);
+  const draftIdFromInput = normalizeCategoryIdToken(categoryIdInput?.value);
+  if (!draftName) {
+    setCategoriesFeedback("Completa el nombre de la categoria.");
+    return;
+  }
+  const draftId = draftIdFromInput || buildCategoryIdFromName(draftName);
+  if (!draftId) {
+    setCategoriesFeedback("Completa un id valido para la categoria.");
+    return;
+  }
+
+  let textRows = [];
+  try {
+    textRows = parseCategoriesArrayInput(categoriesArrayInput?.value);
+  } catch (error) {
+    setCategoriesFeedback(error.message || "No se pudo interpretar el array de categorias.");
+    return;
+  }
+
+  const draftRow = {
+    id: draftId,
+    nombre: draftName,
+    activo: String(categoryActiveSelect?.value || "true") !== "false",
+    orden: 0
+  };
+  let nextRows = Array.isArray(textRows) ? [...textRows] : [];
+  const selectedId = String(selectedCategoryDraftId || "").trim();
+  const selectedIndex = selectedId ? nextRows.findIndex((row) => row.id === selectedId) : -1;
+  const idIndex = nextRows.findIndex((row) => row.id === draftRow.id);
+  const replaceIndex = selectedIndex >= 0 ? selectedIndex : idIndex;
+  if (replaceIndex >= 0) {
+    nextRows[replaceIndex] = {
+      ...nextRows[replaceIndex],
+      ...draftRow
+    };
+  } else {
+    nextRows.push(draftRow);
+  }
+  nextRows = normalizeCategoryRows(nextRows);
+
+  if (categoriesSaveBtn) categoriesSaveBtn.disabled = true;
+  setCategoriesFeedback("Guardando categorias...");
+  try {
+    const result = await saveCategoriesRowsByTenant(tenantId, nextRows);
+    const savedRows = normalizeCategoryRows(extractCategoriesRowsFromTenantPayload(result));
+    allCategoryRows = savedRows.length ? savedRows : nextRows;
+    const persistedRow =
+      allCategoryRows.find((row) => row.id === draftRow.id) ||
+      allCategoryRows.find((row) => row.nombre === draftRow.nombre) ||
+      null;
+    selectedCategoryDraftId = persistedRow?.id || allCategoryRows[0]?.id || "";
+    await saveCachedSectionRows("categories", tenantId, allCategoryRows);
+    renderCategoriesEditor();
+    setCategoriesFeedback("Categorias guardadas.");
+  } catch (error) {
+    console.error(error);
+    setCategoriesFeedback(error.message || "No se pudieron guardar categorias.");
+  } finally {
+    if (categoriesSaveBtn) categoriesSaveBtn.disabled = false;
+  }
+}
+
+async function saveCategoriesRowsByTenant(tenantId, rows) {
+  if (!auth.currentUser) {
+    throw new Error("Inicia sesion nuevamente para guardar categorias.");
+  }
+  const token = await auth.currentUser.getIdToken(true);
+  const safeTenantId = String(tenantId || "").trim();
+  const safeRows = normalizeCategoryRows(rows);
+  const attempts = [
+    {
+      endpoint: getAdminAccountsEndpoint(),
+      payload: {
+        action: "update_categories",
+        tenantId: safeTenantId,
+        categories: safeRows,
+        categorias: safeRows
+      }
+    },
+    {
+      endpoint: getAdminAccountsEndpoint(),
+      payload: {
+        action: "update_tenant_categories",
+        tenantId: safeTenantId,
+        categories: safeRows,
+        categorias: safeRows
+      }
+    },
+    {
+      endpoint: getAdminAccountsEndpoint(),
+      payload: {
+        action: "update_product_categories",
+        tenantId: safeTenantId,
+        categories: safeRows,
+        categorias: safeRows
+      }
+    },
+    {
+      endpoint: getAdminTenantEndpoint(),
+      payload: {
+        tenantId: safeTenantId,
+        categories: safeRows,
+        categorias: safeRows
+      }
+    }
+  ];
+
+  let lastErrorMessage = "No se pudieron guardar categorias.";
+  for (const attempt of attempts) {
+    const response = await fetchWithLoading(attempt.endpoint, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(attempt.payload)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (response.ok && result?.ok !== false) {
+      return result;
+    }
+    lastErrorMessage = String(result?.error || "").trim() || lastErrorMessage;
+  }
+
+  throw new Error(lastErrorMessage);
 }
 
 function handleSalesSearchInput() {
@@ -2975,6 +3444,11 @@ function showLoggedOutState() {
   selectedProductsTenantId = "";
   allProductRows = [];
   latestProductsRequestId = 0;
+  selectedCategoriesUserUid = "";
+  selectedCategoriesTenantId = "";
+  allCategoryRows = [];
+  selectedCategoryDraftId = "";
+  latestCategoriesRequestId = 0;
   selectedSalesUserUid = "";
   selectedSalesTenantId = "";
   allSalesRows = [];
@@ -3046,6 +3520,15 @@ function showLoggedOutState() {
     importBackupTypeSelect.disabled = true;
   }
   if (productsSearchInput) productsSearchInput.value = "";
+  if (categoriesArrayInput) categoriesArrayInput.value = "";
+  if (categoryNameInput) categoryNameInput.value = "";
+  if (categoryIdInput) categoryIdInput.value = "";
+  if (categoryActiveSelect) categoryActiveSelect.value = "true";
+  if (categoryOrderInput) categoryOrderInput.value = "1";
+  if (categoriesSelect) {
+    categoriesSelect.innerHTML = '<option value="">Nueva categoria...</option>';
+    categoriesSelect.disabled = true;
+  }
   if (salesSearchInput) salesSearchInput.value = "";
   if (cashboxesSearchInput) cashboxesSearchInput.value = "";
   if (backupsSearchInput) backupsSearchInput.value = "";
@@ -3055,6 +3538,9 @@ function showLoggedOutState() {
   syncBackupButtonsState();
   setProductsPlaceholder("Selecciona un usuario en Administrador para ver productos.");
   setProductsFeedback("");
+  setCategoriesPlaceholder("Selecciona un usuario en Administrador para ver categorias.");
+  setCategoriesFeedback("");
+  setCategoriesEditorEnabled(false);
   setSalesPlaceholder("Selecciona un usuario en Administrador para ver ventas.");
   setSalesFeedback("");
   setCashboxesPlaceholder("Selecciona un usuario en Administrador para ver cajas.");
@@ -3143,15 +3629,18 @@ function setActiveSection(sectionId) {
 
 function setActiveManagerSubsection(subsectionId) {
   activeManagerSubsection = subsectionId === "sales" ? "sales" : "products";
+  activeManagerSubsection = subsectionId === "categories" ? "categories" : activeManagerSubsection;
   activeManagerSubsection = subsectionId === "cashboxes" ? "cashboxes" : activeManagerSubsection;
   activeManagerSubsection = subsectionId === "backups" ? "backups" : activeManagerSubsection;
 
   productsSection?.classList.toggle("hidden", activeManagerSubsection !== "products");
+  categoriesSection?.classList.toggle("hidden", activeManagerSubsection !== "categories");
   salesSection?.classList.toggle("hidden", activeManagerSubsection !== "sales");
   cashboxesSection?.classList.toggle("hidden", activeManagerSubsection !== "cashboxes");
   backupsSection?.classList.toggle("hidden", activeManagerSubsection !== "backups");
 
   managerNavProductsBtn?.classList.toggle("is-active", activeManagerSubsection === "products");
+  managerNavCategoriesBtn?.classList.toggle("is-active", activeManagerSubsection === "categories");
   managerNavSalesBtn?.classList.toggle("is-active", activeManagerSubsection === "sales");
   managerNavCashboxesBtn?.classList.toggle("is-active", activeManagerSubsection === "cashboxes");
   managerNavBackupsBtn?.classList.toggle("is-active", activeManagerSubsection === "backups");
@@ -3368,6 +3857,15 @@ function setProductsFeedback(message) {
 function setProductsPlaceholder(message) {
   if (!productsTableBody) return;
   productsTableBody.innerHTML = `<tr><td colspan="6">${escapeHtml(String(message || "Sin datos."))}</td></tr>`;
+}
+
+function setCategoriesFeedback(message) {
+  if (!categoriesFeedbackNode) return;
+  categoriesFeedbackNode.textContent = String(message || "");
+}
+
+function setCategoriesPlaceholder(_message) {
+  clearCategoriesEditorState();
 }
 
 function setSalesFeedback(message) {
