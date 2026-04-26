@@ -72,6 +72,7 @@ const refreshBtn = document.getElementById("admin-refresh-btn");
 const navUsersBtn = document.getElementById("admin-nav-users-btn");
 const navEmployeesBtn = document.getElementById("admin-nav-employees-btn");
 const navPlansBtn = document.getElementById("admin-nav-plans-btn");
+const navCategoriesBtn = document.getElementById("admin-nav-categories-btn");
 const navManagerBtn = document.getElementById("admin-nav-manager-btn");
 const navChangePlanBtn = document.getElementById("admin-nav-change-plan-btn");
 const managerNavProductsBtn = document.getElementById("admin-manager-nav-products-btn");
@@ -81,6 +82,7 @@ const managerNavBackupsBtn = document.getElementById("admin-manager-nav-backups-
 const usersSection = document.getElementById("admin-users-section");
 const employeesSection = document.getElementById("admin-employees-section");
 const plansSection = document.getElementById("admin-plans-section");
+const categoriesSection = document.getElementById("admin-categories-section");
 const managerSection = document.getElementById("admin-manager-section");
 const changePlanSection = document.getElementById("admin-change-plan-section");
 const productsSection = document.getElementById("admin-products-section");
@@ -155,6 +157,15 @@ const TRIAL_CONTROL_INPUTS = [
   planTrialWhatsappTextInput
 ].filter(Boolean);
 const planSaveBtn = document.getElementById("admin-plan-save-btn");
+const categoriesFeedbackNode = document.getElementById("admin-categories-feedback");
+const categoriesForm = document.getElementById("admin-categories-form");
+const categoriesSelect = document.getElementById("admin-categories-select");
+const categoriesArrayInput = document.getElementById("admin-categories-array-input");
+const categoryNameInput = document.getElementById("admin-category-name-input");
+const categoryIdInput = document.getElementById("admin-category-id-input");
+const categoryActiveSelect = document.getElementById("admin-category-active-select");
+const categoryOrderInput = document.getElementById("admin-category-order-input");
+const categoriesSaveBtn = document.getElementById("admin-categories-save-btn");
 const productsFeedbackNode = document.getElementById("admin-products-feedback");
 const productsSearchInput = document.getElementById("admin-products-search");
 const productsTableBody = document.getElementById("admin-products-table-body");
@@ -190,6 +201,10 @@ let allUserRows = [];
 let allPlans = [];
 let selectedPlanId = "";
 let activeSection = "users";
+let allRegistrationCategoryRows = [];
+let selectedRegistrationCategoryId = "";
+let registrationCatalogVersion = 1;
+let latestRegistrationCategoriesRequestId = 0;
 let activeManagerSubsection = "products";
 let selectedManagerUserUid = "";
 let selectedManagerTenantId = "";
@@ -258,6 +273,7 @@ async function init() {
   navUsersBtn?.addEventListener("click", () => setActiveSection("users"));
   navEmployeesBtn?.addEventListener("click", () => setActiveSection("employees"));
   navPlansBtn?.addEventListener("click", () => setActiveSection("plans"));
+  navCategoriesBtn?.addEventListener("click", () => setActiveSection("categories"));
   navManagerBtn?.addEventListener("click", () => setActiveSection("manager"));
   navChangePlanBtn?.addEventListener("click", () => setActiveSection("change-plan"));
   managerNavProductsBtn?.addEventListener("click", () => setActiveManagerSubsection("products"));
@@ -294,6 +310,8 @@ async function init() {
   userDocOverlayTenantContent?.addEventListener("click", handleUserDocCardRowCopyClick);
   planCardsNode?.addEventListener("click", handlePlanCardClick);
   planForm?.addEventListener("submit", handlePlanSave);
+  categoriesSelect?.addEventListener("change", handleRegistrationCategoriesSelectChange);
+  categoriesForm?.addEventListener("submit", handleRegistrationCategoriesSave);
   seedStarterPlanBtn?.addEventListener("click", handleSeedStarterPlanClick);
   seedBusinessCatalogBtn?.addEventListener("click", handleSeedBusinessCatalogClick);
   toggleUserStatusBtn?.addEventListener("click", handleToggleUserStatus);
@@ -339,6 +357,10 @@ async function handleRefresh() {
     await loadPlans();
     return;
   }
+  if (activeSection === "categories") {
+    await loadRegistrationCategoriesCatalog({ forceRemote: true });
+    return;
+  }
   if (activeSection === "employees") {
     await loadEmployeesForSelectedUser();
     return;
@@ -370,7 +392,7 @@ async function handleRefresh() {
 }
 
 async function loadDashboardData() {
-  await Promise.allSettled([loadOverview(), loadPlans()]);
+  await Promise.allSettled([loadOverview(), loadPlans(), loadRegistrationCategoriesCatalog()]);
 }
 
 async function loadOverview() {
@@ -689,6 +711,10 @@ function getAdminPlansEndpoint() {
 function getAdminSeedBusinessCatalogEndpoint() {
   const projectId = String(firebaseConfig?.projectId || "").trim();
   return `https://us-central1-${projectId}.cloudfunctions.net/adminSeedBusinessCatalog`;
+}
+
+function getAdminBusinessCatalogEndpoint() {
+  return getAdminSeedBusinessCatalogEndpoint();
 }
 
 function getAdminAccountsEndpoint() {
@@ -2952,6 +2978,376 @@ async function handleSeedBusinessCatalogClick() {
   }
 }
 
+function handleRegistrationCategoriesSelectChange() {
+  selectedRegistrationCategoryId = String(categoriesSelect?.value || "").trim();
+  fillRegistrationCategoryFormFromSelection();
+}
+
+async function loadRegistrationCategoriesCatalog(options = {}) {
+  if (!auth.currentUser) return;
+
+  const forceRemote = options?.forceRemote === true;
+  const requestId = ++latestRegistrationCategoriesRequestId;
+  setRegistrationCategoriesEditorEnabled(false);
+  setRegistrationCategoriesFeedback(
+    forceRemote ? "Actualizando categorias de registro..." : "Cargando categorias de registro..."
+  );
+
+  try {
+    const catalogPayload = await fetchRegistrationBusinessCatalog();
+    if (requestId !== latestRegistrationCategoriesRequestId) return;
+    const normalized = normalizeRegistrationCatalog(catalogPayload);
+    allRegistrationCategoryRows = normalized.rows;
+    registrationCatalogVersion = normalized.version;
+    if (
+      !selectedRegistrationCategoryId ||
+      !allRegistrationCategoryRows.some((row) => row.id === selectedRegistrationCategoryId)
+    ) {
+      selectedRegistrationCategoryId = allRegistrationCategoryRows[0]?.id || "";
+    }
+    renderRegistrationCategoriesEditor();
+    setRegistrationCategoriesFeedback(
+      allRegistrationCategoryRows.length
+        ? `${allRegistrationCategoryRows.length} categoria(s) cargada(s).`
+        : "No hay categorias cargadas en el catalogo."
+    );
+  } catch (error) {
+    console.error(error);
+    if (requestId !== latestRegistrationCategoriesRequestId) return;
+    allRegistrationCategoryRows = [];
+    selectedRegistrationCategoryId = "";
+    registrationCatalogVersion = 1;
+    clearRegistrationCategoriesEditor();
+    setRegistrationCategoriesFeedback(error.message || "No se pudieron cargar las categorias.");
+  } finally {
+    if (requestId === latestRegistrationCategoriesRequestId) {
+      setRegistrationCategoriesEditorEnabled(Boolean(auth.currentUser));
+    }
+  }
+}
+
+async function fetchRegistrationBusinessCatalog() {
+  if (!auth.currentUser) return {};
+  const token = await auth.currentUser.getIdToken(true);
+  const response = await fetchWithLoading(getAdminBusinessCatalogEndpoint(), {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result?.ok) {
+    throw new Error(result?.error || "No se pudo cargar el catalogo de categorias.");
+  }
+  return result;
+}
+
+function normalizeRegistrationCatalog(payloadLike) {
+  const payload = payloadLike && typeof payloadLike === "object" ? payloadLike : {};
+  const catalog =
+    payload?.catalog && typeof payload.catalog === "object" ? payload.catalog : payload;
+  const rows = normalizeRegistrationCategoryRows(catalog?.tiposNegocio || catalog?.businessTypes || []);
+  const version = Math.max(1, toPositiveInteger(catalog?.version || payload?.version || 1));
+  return { version, rows };
+}
+
+function normalizeRegistrationCategoryRows(sourceLike) {
+  const source = Array.isArray(sourceLike) ? sourceLike : [];
+  const normalized = source
+    .map((entry, index) => normalizeRegistrationCategoryRow(entry, index))
+    .filter(Boolean)
+    .sort((a, b) => {
+      const byOrder = toPositiveInteger(a.orden) - toPositiveInteger(b.orden);
+      if (byOrder !== 0) return byOrder;
+      return toPositiveInteger(a._index) - toPositiveInteger(b._index);
+    });
+
+  const usedIds = new Set();
+  return normalized.map((row, index) => {
+    const baseId =
+      normalizeRegistrationCategoryId(row.id) ||
+      normalizeRegistrationCategoryId(row.nombre) ||
+      `categoria-${index + 1}`;
+    let resolvedId = baseId;
+    let suffix = 2;
+    while (usedIds.has(resolvedId)) {
+      resolvedId = `${baseId}-${suffix}`;
+      suffix += 1;
+    }
+    usedIds.add(resolvedId);
+
+    return {
+      id: resolvedId,
+      nombre: normalizeRegistrationCategoryName(row.nombre) || resolvedId,
+      activo: row.activo !== false,
+      orden: index + 1,
+      categorias: normalizeRegistrationCategoryItems(row.categorias)
+    };
+  });
+}
+
+function normalizeRegistrationCategoryRow(entryLike, index) {
+  if (!entryLike || typeof entryLike !== "object") return null;
+  const entry = entryLike;
+  const id = normalizeRegistrationCategoryId(entry?.id || entry?.categoryId || entry?.codigo || entry?.slug);
+  const nombre = normalizeRegistrationCategoryName(
+    entry?.nombre || entry?.name || entry?.categoria || entry?.category || id
+  );
+  if (!id && !nombre) return null;
+  const activo = entry?.activo !== false;
+  const orden = toPositiveInteger(entry?.orden || entry?.order || entry?.position) || index + 1;
+  const categorias = normalizeRegistrationCategoryItems(entry?.categorias || entry?.categories || []);
+  return {
+    id: id || normalizeRegistrationCategoryId(nombre) || `categoria-${index + 1}`,
+    nombre: nombre || id || `Categoria ${index + 1}`,
+    activo,
+    orden,
+    categorias,
+    _index: index
+  };
+}
+
+function normalizeRegistrationCategoryId(valueLike) {
+  const raw = String(valueLike || "").trim();
+  if (!raw) return "";
+  return raw
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^[-_]+|[-_]+$/g, "")
+    .slice(0, 80);
+}
+
+function normalizeRegistrationCategoryName(valueLike) {
+  const raw = String(valueLike || "").trim().replace(/\s+/g, " ");
+  return raw.slice(0, 80);
+}
+
+function normalizeRegistrationCategoryItems(sourceLike) {
+  const source = Array.isArray(sourceLike) ? sourceLike : [];
+  const rows = source
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .map((item) => item.slice(0, 60));
+  const deduped = Array.from(new Set(rows));
+  if (!deduped.length) deduped.push("Otros");
+  if (!deduped.includes("Otros")) deduped.push("Otros");
+  return deduped;
+}
+
+function renderRegistrationCategoriesEditor() {
+  renderRegistrationCategoriesOptions();
+  fillRegistrationCategoryFormFromSelection();
+}
+
+function renderRegistrationCategoriesOptions() {
+  if (!categoriesSelect) return;
+  categoriesSelect.innerHTML =
+    '<option value="">Nueva categoria...</option>' +
+    allRegistrationCategoryRows
+      .map((row) => {
+        const label = `${row.orden}. ${row.nombre} (${row.id})`;
+        return `<option value="${escapeHtml(row.id)}"${row.id === selectedRegistrationCategoryId ? " selected" : ""}>${escapeHtml(label)}</option>`;
+      })
+      .join("");
+}
+
+function fillRegistrationCategoryFormFromSelection() {
+  const selected = getSelectedRegistrationCategoryById(selectedRegistrationCategoryId);
+  if (selected) {
+    if (categoryNameInput) categoryNameInput.value = selected.nombre;
+    if (categoryIdInput) categoryIdInput.value = selected.id;
+    if (categoryActiveSelect) categoryActiveSelect.value = selected.activo ? "true" : "false";
+    if (categoryOrderInput) categoryOrderInput.value = String(selected.orden || 1);
+    if (categoriesArrayInput) {
+      categoriesArrayInput.value = formatRegistrationCategoriesArrayInputValue(selected.categorias);
+    }
+    return;
+  }
+
+  if (categoryNameInput) categoryNameInput.value = "";
+  if (categoryIdInput) categoryIdInput.value = "";
+  if (categoryActiveSelect) categoryActiveSelect.value = "true";
+  if (categoryOrderInput) categoryOrderInput.value = String(getNextRegistrationCategoryOrder());
+  if (categoriesArrayInput) {
+    categoriesArrayInput.value = formatRegistrationCategoriesArrayInputValue(["Otros"]);
+  }
+}
+
+function getSelectedRegistrationCategoryById(idLike) {
+  const id = String(idLike || "").trim();
+  if (!id) return null;
+  return allRegistrationCategoryRows.find((row) => row.id === id) || null;
+}
+
+function getNextRegistrationCategoryOrder() {
+  if (!allRegistrationCategoryRows.length) return 1;
+  const maxOrder = allRegistrationCategoryRows.reduce((acc, row) => {
+    const value = toPositiveInteger(row?.orden);
+    return value > acc ? value : acc;
+  }, 0);
+  return maxOrder + 1;
+}
+
+function clearRegistrationCategoriesEditor() {
+  if (categoriesSelect) {
+    categoriesSelect.innerHTML = '<option value="">Nueva categoria...</option>';
+    categoriesSelect.value = "";
+  }
+  if (categoryNameInput) categoryNameInput.value = "";
+  if (categoryIdInput) categoryIdInput.value = "";
+  if (categoryActiveSelect) categoryActiveSelect.value = "true";
+  if (categoryOrderInput) categoryOrderInput.value = "1";
+  if (categoriesArrayInput) categoriesArrayInput.value = formatRegistrationCategoriesArrayInputValue(["Otros"]);
+}
+
+function setRegistrationCategoriesEditorEnabled(enabled) {
+  const active = enabled === true;
+  if (categoriesSelect) categoriesSelect.disabled = !active;
+  if (categoriesArrayInput) categoriesArrayInput.disabled = !active;
+  if (categoryNameInput) categoryNameInput.disabled = !active;
+  if (categoryIdInput) categoryIdInput.disabled = !active;
+  if (categoryActiveSelect) categoryActiveSelect.disabled = !active;
+  if (categoryOrderInput) categoryOrderInput.disabled = true;
+  if (categoriesSaveBtn) categoriesSaveBtn.disabled = !active;
+}
+
+function setRegistrationCategoriesFeedback(message) {
+  if (!categoriesFeedbackNode) return;
+  categoriesFeedbackNode.textContent = String(message || "");
+}
+
+function formatRegistrationCategoriesArrayInputValue(sourceLike) {
+  const rows = normalizeRegistrationCategoryItems(sourceLike);
+  return JSON.stringify(rows, null, 2);
+}
+
+function parseRegistrationCategoriesArrayInput(valueLike) {
+  const raw = String(valueLike || "").trim();
+  if (!raw) return ["Otros"];
+  let parsed = null;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (_error) {
+    throw new Error("El array de categorias debe tener formato JSON valido.");
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error("El array de categorias debe ser un array JSON.");
+  }
+  return normalizeRegistrationCategoryItems(parsed);
+}
+
+function buildRegistrationCatalogPayload(rows) {
+  const nextVersion = Math.max(1, toPositiveInteger(registrationCatalogVersion) + 1);
+  return {
+    version: nextVersion,
+    tiposNegocio: rows.map((row) => ({
+      id: row.id,
+      nombre: row.nombre,
+      activo: row.activo !== false,
+      orden: toPositiveInteger(row.orden) || 1,
+      categorias: normalizeRegistrationCategoryItems(row.categorias)
+    }))
+  };
+}
+
+async function handleRegistrationCategoriesSave(event) {
+  event.preventDefault();
+  if (!auth.currentUser) return;
+
+  const nombre = normalizeRegistrationCategoryName(categoryNameInput?.value);
+  const id = normalizeRegistrationCategoryId(categoryIdInput?.value || nombre);
+  if (!nombre) {
+    setRegistrationCategoriesFeedback("Completa el nombre de la categoria.");
+    return;
+  }
+  if (!id) {
+    setRegistrationCategoriesFeedback("Completa un id valido para la categoria.");
+    return;
+  }
+
+  let categorias = [];
+  try {
+    categorias = parseRegistrationCategoriesArrayInput(categoriesArrayInput?.value);
+  } catch (error) {
+    setRegistrationCategoriesFeedback(error.message || "No se pudo leer el array de categorias.");
+    return;
+  }
+
+  const draft = {
+    id,
+    nombre,
+    activo: String(categoryActiveSelect?.value || "true") !== "false",
+    orden: 0,
+    categorias
+  };
+  const selectedId = String(selectedRegistrationCategoryId || "").trim();
+  const nextRows = [...allRegistrationCategoryRows];
+  const selectedIndex = selectedId ? nextRows.findIndex((row) => row.id === selectedId) : -1;
+  const idIndex = nextRows.findIndex((row) => row.id === draft.id);
+  const targetIndex = selectedIndex >= 0 ? selectedIndex : idIndex;
+  if (targetIndex >= 0) {
+    nextRows[targetIndex] = {
+      ...nextRows[targetIndex],
+      ...draft
+    };
+  } else {
+    nextRows.push(draft);
+  }
+  const normalizedRows = normalizeRegistrationCategoryRows(nextRows);
+  const payload = buildRegistrationCatalogPayload(normalizedRows);
+
+  if (categoriesSaveBtn) categoriesSaveBtn.disabled = true;
+  setRegistrationCategoriesFeedback("Guardando categorias...");
+  try {
+    const result = await saveRegistrationCategoriesCatalog(payload);
+    const normalizedCatalog = normalizeRegistrationCatalog(result);
+    allRegistrationCategoryRows = normalizedCatalog.rows.length ? normalizedCatalog.rows : normalizedRows;
+    registrationCatalogVersion = normalizedCatalog.version || payload.version;
+    const persisted =
+      allRegistrationCategoryRows.find((row) => row.id === draft.id) ||
+      allRegistrationCategoryRows.find((row) => row.nombre === draft.nombre) ||
+      allRegistrationCategoryRows[0] ||
+      null;
+    selectedRegistrationCategoryId = persisted?.id || "";
+    renderRegistrationCategoriesEditor();
+    setRegistrationCategoriesFeedback("Categorias guardadas.");
+  } catch (error) {
+    console.error(error);
+    setRegistrationCategoriesFeedback(error.message || "No se pudieron guardar las categorias.");
+  } finally {
+    if (categoriesSaveBtn) categoriesSaveBtn.disabled = false;
+  }
+}
+
+async function saveRegistrationCategoriesCatalog(catalogPayload) {
+  if (!auth.currentUser) throw new Error("Inicia sesion nuevamente para guardar categorias.");
+  const token = await auth.currentUser.getIdToken(true);
+  const endpoint = getAdminBusinessCatalogEndpoint();
+  const methods = ["PUT", "POST"];
+  let lastError = "No se pudo guardar el catalogo de categorias.";
+
+  for (const method of methods) {
+    const response = await fetchWithLoading(endpoint, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ catalog: catalogPayload })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (response.ok && result?.ok) {
+      return result;
+    }
+    lastError = String(result?.error || "").trim() || lastError;
+  }
+
+  throw new Error(lastError);
+}
+
 function showLoggedOutState() {
   loginPanel.classList.remove("hidden");
   dashboardPanel.classList.add("hidden");
@@ -2959,6 +3355,10 @@ function showLoggedOutState() {
   refreshBtn.classList.add("hidden");
   allUserRows = [];
   allPlans = [];
+  allRegistrationCategoryRows = [];
+  selectedRegistrationCategoryId = "";
+  registrationCatalogVersion = 1;
+  latestRegistrationCategoriesRequestId = 0;
   selectedPlanId = "";
   activeSection = "users";
   activeManagerSubsection = "products";
@@ -3046,6 +3446,15 @@ function showLoggedOutState() {
     importBackupTypeSelect.disabled = true;
   }
   if (productsSearchInput) productsSearchInput.value = "";
+  if (categoriesSelect) {
+    categoriesSelect.innerHTML = '<option value="">Nueva categoria...</option>';
+    categoriesSelect.disabled = true;
+  }
+  if (categoriesArrayInput) categoriesArrayInput.value = formatRegistrationCategoriesArrayInputValue(["Otros"]);
+  if (categoryNameInput) categoryNameInput.value = "";
+  if (categoryIdInput) categoryIdInput.value = "";
+  if (categoryActiveSelect) categoryActiveSelect.value = "true";
+  if (categoryOrderInput) categoryOrderInput.value = "1";
   if (salesSearchInput) salesSearchInput.value = "";
   if (cashboxesSearchInput) cashboxesSearchInput.value = "";
   if (backupsSearchInput) backupsSearchInput.value = "";
@@ -3055,6 +3464,9 @@ function showLoggedOutState() {
   syncBackupButtonsState();
   setProductsPlaceholder("Selecciona un usuario en Administrador para ver productos.");
   setProductsFeedback("");
+  setRegistrationCategoriesFeedback("");
+  clearRegistrationCategoriesEditor();
+  setRegistrationCategoriesEditorEnabled(false);
   setSalesPlaceholder("Selecciona un usuario en Administrador para ver ventas.");
   setSalesFeedback("");
   setCashboxesPlaceholder("Selecciona un usuario en Administrador para ver cajas.");
@@ -3114,18 +3526,21 @@ function showLoggedInState() {
 function setActiveSection(sectionId) {
   activeSection = sectionId === "plans" ? "plans" : "users";
   activeSection = sectionId === "employees" ? "employees" : activeSection;
+  activeSection = sectionId === "categories" ? "categories" : activeSection;
   activeSection = sectionId === "manager" ? "manager" : activeSection;
   activeSection = sectionId === "change-plan" ? "change-plan" : activeSection;
 
   usersSection?.classList.toggle("hidden", activeSection !== "users");
   employeesSection?.classList.toggle("hidden", activeSection !== "employees");
   plansSection?.classList.toggle("hidden", activeSection !== "plans");
+  categoriesSection?.classList.toggle("hidden", activeSection !== "categories");
   managerSection?.classList.toggle("hidden", activeSection !== "manager");
   changePlanSection?.classList.toggle("hidden", activeSection !== "change-plan");
 
   navUsersBtn?.classList.toggle("is-active", activeSection === "users");
   navEmployeesBtn?.classList.toggle("is-active", activeSection === "employees");
   navPlansBtn?.classList.toggle("is-active", activeSection === "plans");
+  navCategoriesBtn?.classList.toggle("is-active", activeSection === "categories");
   navManagerBtn?.classList.toggle("is-active", activeSection === "manager");
   navChangePlanBtn?.classList.toggle("is-active", activeSection === "change-plan");
 
@@ -3134,6 +3549,9 @@ function setActiveSection(sectionId) {
   }
   if (activeSection === "manager") {
     setActiveManagerSubsection(activeManagerSubsection);
+  }
+  if (activeSection === "categories") {
+    void loadRegistrationCategoriesCatalog();
   }
   if (activeSection === "change-plan") {
     renderChangePlanUserOptions();

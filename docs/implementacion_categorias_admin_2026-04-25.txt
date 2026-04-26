@@ -1,0 +1,70 @@
+Fecha: 2026-04-25
+Proyecto: stockFacilAdmin + stockfacil
+
+Implementacion corregida solicitada
+- La seccion "Categorias" ahora es PRINCIPAL en la barra superior.
+- Ya no esta dentro de "Administrador".
+- Esta pensada para administrar las categorias/tipos del catalogo que impactan en el registro.
+
+Resumen funcional
+1) Nueva seccion principal: Categorias
+- Boton principal: admin-nav-categories-btn
+- Panel: admin-categories-section
+
+2) Campos del formulario (exactamente pedidos)
+- Select de categorias actuales: admin-categories-select
+- Input texto (textarea) para array de categorias JSON: admin-categories-array-input
+- Input nombre: admin-category-name-input
+- Input id: admin-category-id-input
+- Select activo true/false: admin-category-active-select
+- Input orden readonly (incremental automatico): admin-category-order-input
+- Boton Guardar: admin-categories-save-btn
+
+3) Flujo
+- GET catalogo desde Cloud Function (adminSeedBusinessCatalog) para cargar datos actuales.
+- Seleccionar item existente completa nombre/id/activo/orden/array.
+- Si se elige "Nueva categoria...", el orden se muestra como siguiente incremental.
+- Guardar actualiza o agrega el item y publica el catalogo completo.
+
+Funciones nuevas/agregadas en stockFacilAdmin/app.js
+- getAdminBusinessCatalogEndpoint
+- handleRegistrationCategoriesSelectChange
+- loadRegistrationCategoriesCatalog
+- fetchRegistrationBusinessCatalog
+- normalizeRegistrationCatalog
+- normalizeRegistrationCategoryRows
+- normalizeRegistrationCategoryRow
+- normalizeRegistrationCategoryId
+- normalizeRegistrationCategoryName
+- normalizeRegistrationCategoryItems
+- renderRegistrationCategoriesEditor
+- renderRegistrationCategoriesOptions
+- fillRegistrationCategoryFormFromSelection
+- getSelectedRegistrationCategoryById
+- getNextRegistrationCategoryOrder
+- clearRegistrationCategoriesEditor
+- setRegistrationCategoriesEditorEnabled
+- setRegistrationCategoriesFeedback
+- formatRegistrationCategoriesArrayInputValue
+- parseRegistrationCategoriesArrayInput
+- buildRegistrationCatalogPayload
+- handleRegistrationCategoriesSave
+- saveRegistrationCategoriesCatalog
+
+Ajustes en navegacion principal (stockFacilAdmin/app.js)
+- setActiveSection ahora soporta "categories".
+- handleRefresh ahora refresca seccion "categories".
+- loadDashboardData ahora incluye carga de catalogo para categorias.
+- showLoggedOutState limpia estado de la nueva seccion.
+
+Backend corregido (stockfacil/functions/src/adminSeedBusinessCatalog.js)
+- Se revirtio el cambio incorrecto previo en adminManageAccounts.
+- adminSeedBusinessCatalog ahora soporta:
+  - GET: leer catalogo actual
+  - PUT: actualizar catalogo
+  - POST: mantener compatibilidad para seed
+- Responde catalog/version/businessTypesCount para uso desde admin.
+
+Importante
+- Seccion "Categorias" de manager-subnav eliminada/revertida (era el enfoque incorrecto).
+- El enfoque actual es catalogo global de registro, no por tenant/usuario administrador.

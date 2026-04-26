@@ -333,6 +333,8 @@ button:hover {
 #admin-employees-user-select,
 #admin-change-plan-user-select,
 #admin-change-plan-plan-select,
+#admin-categories-select,
+#admin-category-active-select,
 #admin-products-search,
 #admin-sales-search,
 #admin-cashboxes-search,
@@ -354,6 +356,8 @@ button:hover {
 #admin-employees-user-select:focus,
 #admin-change-plan-user-select:focus,
 #admin-change-plan-plan-select:focus,
+#admin-categories-select:focus,
+#admin-category-active-select:focus,
 #admin-products-search:focus,
 #admin-sales-search:focus,
 #admin-cashboxes-search:focus,
@@ -395,6 +399,11 @@ button:hover {
 
 #admin-change-plan-save-btn {
   margin-top: 0;
+}
+
+#admin-categories-save-btn {
+  margin-top: 0;
+  width: fit-content;
 }
 
 #admin-change-plan-current-meta {

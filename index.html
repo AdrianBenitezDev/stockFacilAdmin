@@ -42,6 +42,7 @@
         <button id="admin-nav-users-btn" type="button" class="mode-btn is-active">Usuarios</button>
         <button id="admin-nav-employees-btn" type="button" class="mode-btn-secondary">Empleados</button>
         <button id="admin-nav-plans-btn" type="button" class="mode-btn-secondary">Planes</button>
+        <button id="admin-nav-categories-btn" type="button" class="mode-btn-secondary">Categorias</button>
         <button id="admin-nav-manager-btn" type="button" class="mode-btn-secondary">Administrador</button>
         <button id="admin-nav-change-plan-btn" type="button" class="mode-btn-secondary">Cambiar plan</button>
       </div>
@@ -264,6 +265,44 @@
           </fieldset>
 
           <button id="admin-plan-save-btn" type="submit">Guardar cambios</button>
+        </form>
+      </section>
+
+      <section id="admin-categories-section" class="hidden">
+        <p class="subtitle">Administra las categorias disponibles para el registro de usuarios.</p>
+        <p id="admin-categories-feedback" class="feedback" aria-live="polite"></p>
+
+        <form id="admin-categories-form" class="plan-editor">
+          <h3>Categorias de registro</h3>
+
+          <label for="admin-categories-select">Categorias actuales</label>
+          <select id="admin-categories-select">
+            <option value="">Nueva categoria...</option>
+          </select>
+
+          <label for="admin-categories-array-input">Array de categorias (JSON)</label>
+          <textarea
+            id="admin-categories-array-input"
+            rows="8"
+            placeholder='["Bebidas","Almacen","Golosinas"]'
+          ></textarea>
+
+          <label for="admin-category-name-input">Nombre de la categoria</label>
+          <input id="admin-category-name-input" type="text" maxlength="80" autocomplete="off">
+
+          <label for="admin-category-id-input">ID de la categoria</label>
+          <input id="admin-category-id-input" type="text" maxlength="80" autocomplete="off">
+
+          <label for="admin-category-active-select">Activo</label>
+          <select id="admin-category-active-select">
+            <option value="true">true</option>
+            <option value="false">false</option>
+          </select>
+
+          <label for="admin-category-order-input">Orden</label>
+          <input id="admin-category-order-input" type="number" readonly>
+
+          <button id="admin-categories-save-btn" type="submit">Guardar</button>
         </form>
       </section>
 
